@@ -24,6 +24,7 @@ app.add_middleware(
     secret_key=secrets.token_urlsafe(32),
     session_cookie="sociout_session",
     max_age=3600,  # 1 hour
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
