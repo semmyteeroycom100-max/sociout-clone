@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+*.db
+
+# Secrets (real .env files only)
+.env
+.env.local
+.env.production
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/

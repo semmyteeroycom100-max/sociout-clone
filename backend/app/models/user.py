@@ -1,0 +1,89 @@
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+import enum
+from app.database import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    reset_token = Column(String, nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    campaigns = relationship("Campaign", back_populates="owner")
+    oauth_tokens = relationship("OAuthToken", back_populates="user")
+
+
+class OAuthToken(Base):
+    __tablename__ = "oauth_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider = Column(String, default="google")
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    scope = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    user = relationship("User", back_populates="oauth_tokens")
+
+
+class CampaignStatus(enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class CampaignActionType(enum.Enum):
+    LIKE = "LIKE"
+    SUBSCRIBE = "SUBSCRIBE"
+    COMMENT = "COMMENT"
+
+
+class Campaign(Base):
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    video_url = Column(String, nullable=False)
+    video_id = Column(String, nullable=False)
+    channel_id = Column(String, nullable=True)
+    action_type = Column(Enum(CampaignActionType), nullable=False)
+    target_count = Column(Integer, nullable=False)
+    completed_count = Column(Integer, default=0)
+    comment_text = Column(Text, nullable=True)
+    status = Column(Enum(CampaignStatus), default=CampaignStatus.PENDING)
+    celery_task_id = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    
+    owner = relationship("User", back_populates="campaigns")
+    actions = relationship("CampaignAction", back_populates="campaign")
+
+
+class CampaignAction(Base):
+    __tablename__ = "campaign_actions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    action_index = Column(Integer, nullable=False)
+    success = Column(Boolean, default=False)
+    youtube_response = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    campaign = relationship("Campaign", back_populates="actions")
