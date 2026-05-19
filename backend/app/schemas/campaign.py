@@ -1,7 +1,8 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, field_serializer
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+import re
 
 class ActionType(str, Enum):
     LIKE = "LIKE"
@@ -26,8 +27,11 @@ class CampaignCreate(BaseModel):
 
     @field_validator('video_url')
     def validate_youtube_url(cls, v):
-        if not v.startswith(('https://www.youtube.com/', 'https://youtu.be/', 'https://m.youtube.com/')):
+        # Simple validation: must contain a YouTube video ID (11 chars)
+        if not re.search(r'([a-zA-Z0-9_-]{11})', v):
             raise ValueError('Must be a valid YouTube URL')
+        if not ('youtube.com' in v or 'youtu.be' in v):
+            raise ValueError('Must be a YouTube URL')
         return v
 
     @field_validator('target_count')
@@ -46,12 +50,16 @@ class CampaignResponse(BaseModel):
     action_type: str
     target_count: int
     completed_count: int
-    status: CampaignStatus
+    status: str
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     scheduled_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
+
+    @field_serializer('action_type', 'status')
+    def serialize_enum(self, value: Enum) -> str:
+        return value.value if isinstance(value, Enum) else value
 
     class Config:
         from_attributes = True
