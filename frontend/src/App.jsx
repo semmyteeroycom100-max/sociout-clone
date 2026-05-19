@@ -9,6 +9,7 @@ import ResetPassword from './pages/ResetPassword';
 import TestCampaign from './pages/TestCampaign';
 import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import ThumbnailTest from './pages/ThumbnailTest';
 import TermsOfService from './pages/TermsOfService';
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/test-campaign" element={<TestCampaign />} />
         <Route path="/" element={<Login />} />
+        <Route path="/thumbnail-test" element={<ThumbnailTest />} />
 	<Route path="/analytics" element={<Analytics />} />
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
