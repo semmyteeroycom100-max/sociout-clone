@@ -17,17 +17,19 @@ class CampaignStatus(str, Enum):
 
 class CampaignCreate(BaseModel):
     name: str
-    video_url: str  # Changed from HttpUrl to str
+    video_url: str
     action_type: ActionType
     target_count: int
     comment_text: Optional[str] = None
-    
+    comment_list: Optional[List[str]] = None
+    scheduled_at: Optional[datetime] = None
+
     @field_validator('video_url')
     def validate_youtube_url(cls, v):
         if not v.startswith(('https://www.youtube.com/', 'https://youtu.be/', 'https://m.youtube.com/')):
             raise ValueError('Must be a valid YouTube URL')
         return v
-    
+
     @field_validator('target_count')
     def validate_target_count(cls, v):
         if v < 1:
@@ -48,7 +50,9 @@ class CampaignResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    
+    scheduled_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -58,7 +62,7 @@ class CampaignActionResponse(BaseModel):
     success: bool
     error_message: Optional[str] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 

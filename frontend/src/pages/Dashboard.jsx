@@ -14,21 +14,27 @@ import {
   Clock
 } from 'lucide-react';
 
-const API_BASE = 'https://sociout-backend.onrender.com/api'; // ✅ production backend
+const API_BASE = 'https://sociout-backend.onrender.com/api';
 
 function Dashboard() {
   const [user, setUser] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [youtubeConnected, setYoutubeConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  // Campaign form state
   const [formData, setFormData] = useState({
     name: '',
     video_url: '',
     action_type: 'LIKE',
     target_count: 10
   });
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+
+  // Additional states for new features
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [commentListText, setCommentListText] = useState(''); // one comment per line
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -82,9 +88,25 @@ function Dashboard() {
     e.preventDefault();
     setLoading(true);
     try {
-      await createCampaign(formData);
+      // Build payload
+      const payload = { ...formData };
+      // Add scheduled_at if provided
+      if (scheduledDate) {
+        payload.scheduled_at = new Date(scheduledDate).toISOString();
+      }
+      // Add comment_list if action is COMMENT and textarea has content
+      if (formData.action_type === 'COMMENT' && commentListText.trim()) {
+        const comments = commentListText.split('\n').filter(c => c.trim().length > 0);
+        if (comments.length > 0) {
+          payload.comment_list = comments;
+        }
+      }
+      await createCampaign(payload);
       setShowModal(false);
+      // Reset form
       setFormData({ name: '', video_url: '', action_type: 'LIKE', target_count: 10 });
+      setScheduledDate('');
+      setCommentListText('');
       loadCampaigns();
     } catch (err) {
       alert('Failed to create campaign');
@@ -99,7 +121,6 @@ function Dashboard() {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      
       if (response.ok) {
         loadCampaigns();
       } else {
@@ -143,7 +164,7 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Sidebar */}
+      {/* Sidebar unchanged (keeping your original code) */}
       <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white shadow-xl">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
@@ -152,7 +173,6 @@ function Dashboard() {
             </div>
             <h1 className="text-xl font-bold">Sociout</h1>
           </div>
-          
           <nav className="space-y-2">
             <a href="#" className="flex items-center gap-3 px-4 py-3 bg-white/10 rounded-lg">
               <LayoutDashboard className="w-5 h-5" />
@@ -168,7 +188,6 @@ function Dashboard() {
             </a>
           </nav>
         </div>
-        
         <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-gray-700">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
@@ -179,13 +198,8 @@ function Dashboard() {
               <p className="text-xs text-gray-400">{user?.email}</p>
             </div>
           </div>
-          
-          {/* YouTube Connect Button – now uses production backend */}
           {!youtubeConnected && (
-            <a
-              href="https://sociout-backend.onrender.com/api/auth/google"
-              className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm"
-            >
+            <a href="https://sociout-backend.onrender.com/api/auth/google" className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -195,30 +209,24 @@ function Dashboard() {
               Connect YouTube
             </a>
           )}
-          
           {youtubeConnected && (
             <div className="mb-3 px-3 py-2 bg-green-500/20 rounded-lg text-center">
               <p className="text-green-400 text-xs">✓ YouTube Connected</p>
             </div>
           )}
-          
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-gray-300 hover:text-white transition w-full px-3 py-2 rounded-lg hover:bg-white/5"
-          >
+          <button onClick={handleLogout} className="flex items-center gap-2 text-gray-300 hover:text-white transition w-full px-3 py-2 rounded-lg hover:bg-white/5">
             <LogOut className="w-4 h-4" />
             <span className="text-sm">Logout</span>
           </button>
         </div>
       </aside>
 
-      {/* Main Content (unchanged) */}
+      {/* Main Content */}
       <main className="ml-64 p-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
           <p className="text-gray-500">Manage your YouTube automation campaigns</p>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-2">
@@ -299,6 +307,12 @@ function Dashboard() {
                         </div>
                       </div>
                     </div>
+                    {/* Display scheduled time if exists */}
+                    {campaign.scheduled_at && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Scheduled: {new Date(campaign.scheduled_at).toLocaleString()}
+                      </p>
+                    )}
                     {campaign.status === 'pending' && (
                       <button onClick={() => handleStartCampaign(campaign.id)} className="w-full mt-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium" disabled={!youtubeConnected}>
                         {youtubeConnected ? 'Start Campaign' : 'Connect YouTube First'}
@@ -318,7 +332,7 @@ function Dashboard() {
         </div>
       </main>
 
-      {/* Modal */}
+      {/* Campaign Creation Modal (with new fields) */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -340,10 +354,27 @@ function Dashboard() {
                   <option value="COMMENT">💬 Post Comment</option>
                 </select>
               </div>
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-medium mb-2">Target Count (max 100)</label>
                 <input type="number" min="1" max="100" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={formData.target_count} onChange={(e) => setFormData({...formData, target_count: parseInt(e.target.value) || 10})} required />
               </div>
+
+              {/* Scheduled start datetime picker */}
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-medium mb-2">Schedule Start (optional)</label>
+                <input type="datetime-local" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
+                <p className="text-gray-500 text-xs mt-1">Leave empty to start manually, or pick a future date/time.</p>
+              </div>
+
+              {/* Batch comments (only for COMMENT action) */}
+              {formData.action_type === 'COMMENT' && (
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-medium mb-2">Comments (one per line, randomly selected)</label>
+                  <textarea className="w-full px-3 py-2 border border-gray-300 rounded-lg" rows="4" placeholder="Great video!%0AThanks for sharing!%0AVery helpful" value={commentListText} onChange={(e) => setCommentListText(e.target.value)} />
+                  <p className="text-gray-500 text-xs mt-1">{commentListText.split('\n').filter(l => l.trim()).length} comment(s) ready</p>
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition disabled:opacity-50">{loading ? 'Creating...' : 'Create Campaign'}</button>

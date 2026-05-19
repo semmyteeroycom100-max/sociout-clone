@@ -20,7 +20,7 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 @router.get("/google")
 async def auth_google(request: Request):
     """Start Google OAuth flow"""
-    redirect_uri = "http://localhost:8000/api/auth/google/callback"
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")  
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 

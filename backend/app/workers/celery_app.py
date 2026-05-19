@@ -1,13 +1,12 @@
 from celery import Celery
 import os
 from dotenv import load_dotenv
+from celery.schedules import crontab
 
 load_dotenv()
 
-# Redis URL from .env
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6380")
 
-# Create Celery app
 celery_app = Celery(
     "sociout_clone",
     broker=REDIS_URL,
@@ -15,7 +14,6 @@ celery_app = Celery(
     include=["app.workers.campaign_tasks"]
 )
 
-# Celery configuration
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -23,6 +21,14 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_time_limit=30 * 60,  # 30 minutes
-    task_soft_time_limit=25 * 60,  # 25 minutes
+    task_time_limit=30 * 60,
+    task_soft_time_limit=25 * 60,
 )
+
+# Beat schedule for periodic tasks
+celery_app.conf.beat_schedule = {
+    'start-scheduled-campaigns': {
+        'task': 'app.workers.campaign_tasks.start_scheduled_campaigns',
+        'schedule': 60.0,  # every 60 seconds
+    },
+}

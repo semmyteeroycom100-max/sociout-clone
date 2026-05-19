@@ -65,11 +65,14 @@ class Campaign(Base):
     target_count = Column(Integer, nullable=False)
     completed_count = Column(Integer, default=0)
     comment_text = Column(Text, nullable=True)
+    comment_list = Column(Text, nullable=True)        # JSON array
     status = Column(Enum(CampaignStatus), default=CampaignStatus.PENDING)
     celery_task_id = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
     
     owner = relationship("User", back_populates="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign")

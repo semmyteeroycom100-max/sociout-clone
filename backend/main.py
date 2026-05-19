@@ -58,3 +58,6 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+@app.get("/debug/routes")
+def list_routes():
+    return [{"path": route.path, "name": route.name} for route in app.routes]

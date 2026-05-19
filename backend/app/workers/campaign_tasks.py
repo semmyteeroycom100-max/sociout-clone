@@ -166,3 +166,30 @@ def execute_campaign(self, campaign_id: int):
         campaign.error_message = str(e)
         db.commit()
         return {"error": str(e)}
+
+
+# ==================== NEW TASK FOR SCHEDULED CAMPAIGNS ====================
+from datetime import datetime
+from sqlalchemy.orm import Session
+from app.database import SessionLocal
+from app.models.user import Campaign, CampaignStatus
+
+@celery_app.task
+def start_scheduled_campaigns():
+    """Periodically check for pending scheduled campaigns and start them"""
+    db = SessionLocal()
+    now = datetime.utcnow()
+    campaigns = db.query(Campaign).filter(
+        Campaign.status == CampaignStatus.PENDING,
+        Campaign.scheduled_at <= now,
+        Campaign.scheduled_at.isnot(None)
+    ).all()
+    
+    for camp in campaigns:
+        # Use the existing execute_campaign task (defined above)
+        execute_campaign.delay(camp.id)
+        camp.started_at = now
+        db.add(camp)
+    
+    db.commit()
+    db.close()
