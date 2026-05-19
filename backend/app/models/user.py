@@ -113,7 +113,12 @@ class ThumbnailTest(Base):
 
 class ThumbnailTest(Base):
     __tablename__ = "thumbnail_tests"
-
+    __table_args__ = {'extend_existing': True}
+    
+    # The rest of your model's columns remain below this line
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # ... etc ...
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     video_url = Column(String, nullable=False)
