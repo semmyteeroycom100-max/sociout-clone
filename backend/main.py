@@ -6,7 +6,7 @@ import os
 import secrets
 
 from app.database import engine, Base
-from app.api import auth, users, oauth, youtube, campaigns, password_reset,admin
+from app.api import auth, users, oauth, youtube, campaigns, password_reset, admin, analytics
 
 load_dotenv()
 
@@ -46,7 +46,7 @@ app.include_router(oauth.router)
 app.include_router(youtube.router)
 app.include_router(campaigns.router)
 app.include_router(admin.router)
-
+app.include_router(analytics.router)
 @app.get("/")
 async def root():
     return {
