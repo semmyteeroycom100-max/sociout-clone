@@ -34,7 +34,7 @@ function Dashboard() {
 
   // Additional states for new features
   const [scheduledDate, setScheduledDate] = useState('');
-  const [commentListText, setCommentListText] = useState(''); // one comment per line
+  const [commentListText, setCommentListText] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -88,13 +88,10 @@ function Dashboard() {
     e.preventDefault();
     setLoading(true);
     try {
-      // Build payload
       const payload = { ...formData };
-      // Add scheduled_at if provided
       if (scheduledDate) {
         payload.scheduled_at = new Date(scheduledDate).toISOString();
       }
-      // Add comment_list if action is COMMENT and textarea has content
       if (formData.action_type === 'COMMENT' && commentListText.trim()) {
         const comments = commentListText.split('\n').filter(c => c.trim().length > 0);
         if (comments.length > 0) {
@@ -103,7 +100,6 @@ function Dashboard() {
       }
       await createCampaign(payload);
       setShowModal(false);
-      // Reset form
       setFormData({ name: '', video_url: '', action_type: 'LIKE', target_count: 10 });
       setScheduledDate('');
       setCommentListText('');
@@ -126,8 +122,10 @@ function Dashboard() {
       } else {
         alert('Failed to start campaign');
       }
-    } catch (err) {
-      alert('Failed to start campaign');
+    }catch (err) {
+  console.error('Full error:', err);
+  const errorMessage = err.response?.data?.detail || err.message || 'Unknown error';
+  alert('Failed to create campaign: ' + JSON.stringify(errorMessage));
     }
   };
 
@@ -164,7 +162,7 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Sidebar unchanged (keeping your original code) */}
+      {/* Sidebar (unchanged) */}
       <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white shadow-xl">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
@@ -307,7 +305,6 @@ function Dashboard() {
                         </div>
                       </div>
                     </div>
-                    {/* Display scheduled time if exists */}
                     {campaign.scheduled_at && (
                       <p className="text-xs text-gray-400 mt-1">
                         Scheduled: {new Date(campaign.scheduled_at).toLocaleString()}
@@ -332,10 +329,10 @@ function Dashboard() {
         </div>
       </main>
 
-      {/* Campaign Creation Modal (with new fields) */}
+      {/* Campaign Creation Modal – SCROLLABLE FIX APPLIED */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Create New Campaign</h2>
             <form onSubmit={handleCreateCampaign}>
               <div className="mb-4">
