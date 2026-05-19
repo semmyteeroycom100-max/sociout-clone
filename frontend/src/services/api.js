@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// THIS IS THE CORRECT PRODUCTION URL
+// HARDCODED PRODUCTION URL – forces calls to live backend
 const API_URL = 'https://sociout-backend.onrender.com/api';
 
 const API = axios.create({
