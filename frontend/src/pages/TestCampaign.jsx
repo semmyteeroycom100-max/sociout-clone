@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE = 'https://sociout-backend.onrender.com/api';
+
 function TestCampaign() {
   const [name, setName] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
@@ -33,7 +35,7 @@ function TestCampaign() {
     console.log('Sending:', data);
     
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/campaigns/create', {
+      const response = await fetch(`${API_BASE}/campaigns/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+const API_BASE = 'https://sociout-backend.onrender.com/api';
+
 function ResetPassword() {
   const [searchParams] = useSearchParams();
   const [password, setPassword] = useState('');
@@ -29,7 +31,7 @@ function ResetPassword() {
     setError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/password-reset/reset', {
+      const response = await fetch(`${API_BASE}/password-reset/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, new_password: password })

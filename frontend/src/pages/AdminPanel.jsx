@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE = 'https://sociout-backend.onrender.com/api';
+
 function AdminPanel() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
@@ -21,7 +23,7 @@ function AdminPanel() {
   const loadStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/stats', {
+      const response = await fetch(`${API_BASE}/admin/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.status === 403) {
@@ -39,7 +41,7 @@ function AdminPanel() {
   const loadUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/users', {
+      const response = await fetch(`${API_BASE}/admin/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
@@ -66,7 +68,7 @@ function AdminPanel() {
     }
     
     const token = localStorage.getItem('token');
-    const response = await fetch('http://127.0.0.1:8000/api/admin/users/batch', {
+    const response = await fetch(`${API_BASE}/admin/users/batch`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -96,7 +98,6 @@ function AdminPanel() {
         </button>
       </div>
       
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-4 rounded shadow">
           <h3 className="text-gray-500 text-sm">Total Users</h3>
@@ -116,7 +117,6 @@ function AdminPanel() {
         </div>
       </div>
       
-      {/* Batch Create Users */}
       <div className="bg-white p-6 rounded shadow mb-8">
         <h2 className="text-xl font-bold mb-4">Batch Create Users</h2>
         <textarea
@@ -137,7 +137,6 @@ function AdminPanel() {
         </p>
       </div>
       
-      {/* Users List */}
       <div className="bg-white p-6 rounded shadow">
         <h2 className="text-xl font-bold mb-4">Users ({users.length})</h2>
         <div className="overflow-x-auto">

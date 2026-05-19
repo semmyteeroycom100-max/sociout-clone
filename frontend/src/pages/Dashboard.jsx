@@ -14,6 +14,8 @@ import {
   Clock
 } from 'lucide-react';
 
+const API_BASE = 'https://sociout-backend.onrender.com/api'; // ✅ production backend
+
 function Dashboard() {
   const [user, setUser] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -41,7 +43,7 @@ function Dashboard() {
 
   const loadUser = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/users/me', {
+      const response = await fetch(`${API_BASE}/users/me`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       const data = await response.json();
@@ -54,7 +56,7 @@ function Dashboard() {
 
   const loadCampaigns = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/campaigns', {
+      const response = await fetch(`${API_BASE}/campaigns`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       const data = await response.json();
@@ -66,7 +68,7 @@ function Dashboard() {
 
   const checkYoutubeStatus = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/youtube/status', {
+      const response = await fetch(`${API_BASE}/auth/youtube/status`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       const data = await response.json();
@@ -76,24 +78,24 @@ function Dashboard() {
     }
   };
 
-const handleCreateCampaign = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    await createCampaign(formData);
-    setShowModal(false);
-    setFormData({ name: '', video_url: '', action_type: 'like', target_count: 10 });
-    loadCampaigns();
-  } catch (err) {
-    alert('Failed to create campaign');
-  } finally {
-    setLoading(false);
-  }
-};
-      
-      const handleStartCampaign = async (id) => {
+  const handleCreateCampaign = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/campaigns/${id}/start`, {
+      await createCampaign(formData);
+      setShowModal(false);
+      setFormData({ name: '', video_url: '', action_type: 'LIKE', target_count: 10 });
+      loadCampaigns();
+    } catch (err) {
+      alert('Failed to create campaign');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartCampaign = async (id) => {
+    try {
+      const response = await fetch(`${API_BASE}/campaigns/${id}/start`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
@@ -115,9 +117,9 @@ const handleCreateCampaign = async (e) => {
 
   const getActionIcon = (type) => {
     switch(type) {
-      case 'like': return <ThumbsUp className="w-4 h-4 text-blue-500" />;
-      case 'subscribe': return <Users className="w-4 h-4 text-green-500" />;
-      case 'comment': return <MessageCircle className="w-4 h-4 text-purple-500" />;
+      case 'LIKE': return <ThumbsUp className="w-4 h-4 text-blue-500" />;
+      case 'SUBSCRIBE': return <Users className="w-4 h-4 text-green-500" />;
+      case 'COMMENT': return <MessageCircle className="w-4 h-4 text-purple-500" />;
       default: return <Video className="w-4 h-4 text-gray-500" />;
     }
   };
@@ -178,10 +180,10 @@ const handleCreateCampaign = async (e) => {
             </div>
           </div>
           
-          {/* YouTube Connect Button */}
+          {/* YouTube Connect Button – now uses production backend */}
           {!youtubeConnected && (
             <a
-              href="http://localhost:8000/api/auth/google"
+              href="https://sociout-backend.onrender.com/api/auth/google"
               className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -210,15 +212,13 @@ const handleCreateCampaign = async (e) => {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content (unchanged) */}
       <main className="ml-64 p-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
           <p className="text-gray-500">Manage your YouTube automation campaigns</p>
         </div>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-2">
@@ -227,7 +227,6 @@ const handleCreateCampaign = async (e) => {
             </div>
             <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
           </div>
-          
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-2">
               <p className="text-gray-500 text-sm">Active Campaigns</p>
@@ -235,7 +234,6 @@ const handleCreateCampaign = async (e) => {
             </div>
             <p className="text-3xl font-bold text-gray-800">{stats.running}</p>
           </div>
-          
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-2">
               <p className="text-gray-500 text-sm">Completed</p>
@@ -243,7 +241,6 @@ const handleCreateCampaign = async (e) => {
             </div>
             <p className="text-3xl font-bold text-gray-800">{stats.completed}</p>
           </div>
-          
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-2">
               <p className="text-gray-500 text-sm">Total Actions</p>
@@ -253,7 +250,6 @@ const handleCreateCampaign = async (e) => {
           </div>
         </div>
 
-        {/* YouTube Connection Warning */}
         {!youtubeConnected && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-8">
             <p className="text-yellow-800 text-sm">
@@ -262,51 +258,36 @@ const handleCreateCampaign = async (e) => {
           </div>
         )}
 
-        {/* Campaigns Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center">
             <div>
               <h2 className="text-xl font-semibold text-gray-800">Your Campaigns</h2>
               <p className="text-gray-500 text-sm mt-1">Create and manage your automation campaigns</p>
             </div>
-            <button 
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition"
-            >
-              <PlusCircle className="w-5 h-5" />
-              New Campaign
+            <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition">
+              <PlusCircle className="w-5 h-5" /> New Campaign
             </button>
           </div>
-          
           <div className="p-6">
             {campaigns.length === 0 ? (
               <div className="text-center py-12">
                 <Video className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-600 mb-2">No campaigns yet</h3>
                 <p className="text-gray-400 mb-4">Create your first campaign to start automating</p>
-                <button 
-                  onClick={() => setShowModal(true)}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-                >
-                  Create Campaign
-                </button>
+                <button onClick={() => setShowModal(true)} className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">Create Campaign</button>
               </div>
             ) : (
               <div className="space-y-4">
-                {campaigns.map((campaign) => (
+                {campaigns.map(campaign => (
                   <div key={campaign.id} className="border border-gray-100 rounded-lg p-4 hover:shadow-md transition">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
                         {getActionIcon(campaign.action_type)}
                         <h3 className="font-semibold text-gray-800">{campaign.name}</h3>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>
-                        {campaign.status}
-                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>{campaign.status}</span>
                     </div>
-                    
                     <p className="text-sm text-gray-500 mb-3">{campaign.video_url}</p>
-                    
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex-1 mr-4">
                         <div className="flex justify-between text-sm text-gray-600 mb-1">
@@ -314,24 +295,15 @@ const handleCreateCampaign = async (e) => {
                           <span>{campaign.completed_count} / {campaign.target_count}</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all"
-                            style={{ width: `${(campaign.completed_count / campaign.target_count) * 100}%` }}
-                          ></div>
+                          <div className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all" style={{ width: `${(campaign.completed_count / campaign.target_count) * 100}%` }}></div>
                         </div>
                       </div>
                     </div>
-                    
                     {campaign.status === 'pending' && (
-                      <button
-                        onClick={() => handleStartCampaign(campaign.id)}
-                        className="w-full mt-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium"
-                        disabled={!youtubeConnected}
-                      >
+                      <button onClick={() => handleStartCampaign(campaign.id)} className="w-full mt-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium" disabled={!youtubeConnected}>
                         {youtubeConnected ? 'Start Campaign' : 'Connect YouTube First'}
                       </button>
                     )}
-                    
                     {campaign.status === 'running' && (
                       <div className="flex items-center gap-2 mt-2 text-blue-600">
                         <Clock className="w-4 h-4 animate-pulse" />
@@ -346,78 +318,35 @@ const handleCreateCampaign = async (e) => {
         </div>
       </main>
 
-      {/* Create Campaign Modal */}
+      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Create New Campaign</h2>
-            
             <form onSubmit={handleCreateCampaign}>
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-medium mb-2">Campaign Name</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="My Campaign"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  required
-                />
+                <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="My Campaign" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
               </div>
-              
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-medium mb-2">YouTube URL</label>
-                <input
-                  type="url"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="https://youtube.com/watch?v=..."
-                  value={formData.video_url}
-                  onChange={(e) => setFormData({...formData, video_url: e.target.value})}
-                  required
-                />
+                <input type="url" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://youtube.com/watch?v=..." value={formData.video_url} onChange={(e) => setFormData({...formData, video_url: e.target.value})} required />
               </div>
-              
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-medium mb-2">Action Type</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.action_type}
-                  onChange={(e) => setFormData({...formData, action_type: e.target.value})}
-                >
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={formData.action_type} onChange={(e) => setFormData({...formData, action_type: e.target.value})}>
                   <option value="LIKE">👍 Like Video</option>
                   <option value="SUBSCRIBE">🔔 Subscribe to Channel</option>
                   <option value="COMMENT">💬 Post Comment</option>
                 </select>
               </div>
-              
               <div className="mb-6">
                 <label className="block text-gray-700 text-sm font-medium mb-2">Target Count (max 100)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.target_count}
-                  onChange={(e) => setFormData({...formData, target_count: parseInt(e.target.value) || 10})}
-                  required
-                />
+                <input type="number" min="1" max="100" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={formData.target_count} onChange={(e) => setFormData({...formData, target_count: parseInt(e.target.value) || 10})} required />
               </div>
-              
               <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition disabled:opacity-50"
-                >
-                  {loading ? 'Creating...' : 'Create Campaign'}
-                </button>
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition disabled:opacity-50">{loading ? 'Creating...' : 'Create Campaign'}</button>
               </div>
             </form>
           </div>
