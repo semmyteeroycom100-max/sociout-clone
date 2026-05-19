@@ -16,8 +16,3 @@ oauth.register(
         "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback"),
     },
 )
-@router.get("/google")
-async def auth_google(request: Request):
-    redirect_uri = "https://sociout-backend.onrender.com/api/auth/google/callback"
-    print(f"Redirect URI used: {redirect_uri}")  # Add this line
-    return await oauth.google.authorize_redirect(request, redirect_uri)
