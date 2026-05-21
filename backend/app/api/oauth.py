@@ -23,7 +23,14 @@ async def auth_google(request: Request):
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")  
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
-
+@router.get("/google")
+async def auth_google(request: Request):
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
+    return await oauth.google.authorize_redirect(
+        request, redirect_uri,
+        access_type="offline",
+        prompt="consent"
+    )
 @router.get("/google/callback")
 async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
     """Handle Google OAuth callback"""
