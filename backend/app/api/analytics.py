@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 from app.database import get_db
 from app.models.user import User, OAuthToken
 from app.core.auth import decode_access_token
+import os
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 security = HTTPBearer()
