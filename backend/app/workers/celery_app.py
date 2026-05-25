@@ -1,16 +1,14 @@
 from celery import Celery
 import os
 from dotenv import load_dotenv
-from celery.schedules import crontab
 
 load_dotenv()
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6380")
-
+# Use in‑memory broker and no result backend – this completely avoids Redis
 celery_app = Celery(
     "sociout_clone",
-    broker=REDIS_URL,
-    backend=REDIS_URL,
+    broker="memory://",
+    backend=None,
     include=["app.workers.campaign_tasks"]
 )
 
@@ -23,14 +21,11 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=30 * 60,
     task_soft_time_limit=25 * 60,
-    task_always_eager=True,   # <-- add this
-)   
- 
+    task_always_eager=True,          # Run tasks synchronously inside the web process
+    task_ignore_result=True,         # Do not attempt to store results (no backend needed)
+    task_eager_propagates=True,      # Let exceptions propagate immediately
+)
 
-# Beat schedule for periodic tasks
-celery_app.conf.beat_schedule = {
-    'start-scheduled-campaigns': {
-        'task': 'app.workers.campaign_tasks.start_scheduled_campaigns',
-        'schedule': 60.0,  # every 60 seconds
-    },
-}
+# If you still want scheduled campaigns later, you can add the beat schedule,
+# but it won't work without a separate beat process. For now, comment it out or leave empty.
+# celery_app.conf.beat_schedule = {}
