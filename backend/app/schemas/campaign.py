@@ -62,7 +62,7 @@ class CampaignResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
+   
 class CampaignActionResponse(BaseModel):
     id: int
     action_index: int
