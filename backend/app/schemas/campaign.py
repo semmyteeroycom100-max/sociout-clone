@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, field_serializer  # add field_serializer
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -47,16 +47,23 @@ class CampaignResponse(BaseModel):
     name: str
     video_url: str
     video_id: str
-    action_type: ActionType      # Use the Enum type
+    action_type: ActionType
     target_count: int
     completed_count: int
-    status: CampaignStatus       # Use the Enum type
+    status: CampaignStatus
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     scheduled_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
 
+ @field_serializer('action_type', 'status')
+    def serialize_enum(self, value: Enum) -> str:
+        return value.value
+
+    class Config:
+        from_attributes = True
+        # use_enum_values = True  # optional, but we already have explicit serializer
     class Config:
         from_attributes = True
         use_enum_values = True   # ← This converts enums to their string values when serializing
