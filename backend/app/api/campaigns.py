@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import re
+import json
 
 from app.database import get_db
 from app.models.user import User, Campaign, CampaignStatus, CampaignActionType
@@ -44,7 +45,7 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
     return user
 
 
-@router.post("/create", response_model=CampaignResponse)
+@router.post("/create")   # response_model removed to avoid enum serialization
 async def create_campaign(
     campaign_data: CampaignCreate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -73,14 +74,31 @@ async def create_campaign(
         action_type=campaign_data.action_type,
         target_count=campaign_data.target_count,
         comment_text=campaign_data.comment_text,
-        status=CampaignStatus.PENDING
+        # comment_list will be handled later if needed
+        status=CampaignStatus.PENDING,
+        scheduled_at=campaign_data.scheduled_at
     )
     
     db.add(campaign)
     db.commit()
     db.refresh(campaign)
     
-    return campaign
+    # Return a dictionary with enum values converted to strings
+    return {
+        "id": campaign.id,
+        "name": campaign.name,
+        "video_url": campaign.video_url,
+        "video_id": campaign.video_id,
+        "action_type": campaign.action_type.value,
+        "target_count": campaign.target_count,
+        "completed_count": campaign.completed_count,
+        "status": campaign.status.value,
+        "error_message": campaign.error_message,
+        "created_at": campaign.created_at,
+        "updated_at": campaign.updated_at,
+        "scheduled_at": campaign.scheduled_at,
+        "started_at": campaign.started_at,
+    }
 
 
 @router.post("/{campaign_id}/start")
@@ -124,7 +142,25 @@ async def list_campaigns(
         Campaign.user_id == user.id
     ).order_by(desc(Campaign.created_at)).offset(skip).limit(limit).all()
     
-    return campaigns
+    # Convert list of SQLAlchemy objects to dicts with enum values as strings
+    result = []
+    for c in campaigns:
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "video_url": c.video_url,
+            "video_id": c.video_id,
+            "action_type": c.action_type.value,
+            "target_count": c.target_count,
+            "completed_count": c.completed_count,
+            "status": c.status.value,
+            "error_message": c.error_message,
+            "created_at": c.created_at,
+            "updated_at": c.updated_at,
+            "scheduled_at": c.scheduled_at,
+            "started_at": c.started_at,
+        })
+    return result
 
 
 @router.get("/{campaign_id}/status")
@@ -151,4 +187,6 @@ async def get_campaign_status(
         "target_count": campaign.target_count,
         "completed_count": campaign.completed_count,
         "percentage": (campaign.completed_count / campaign.target_count * 100) if campaign.target_count > 0 else 0,
+        "scheduled_at": campaign.scheduled_at,
+        "started_at": campaign.started_at,
     }
