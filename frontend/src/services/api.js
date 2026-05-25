@@ -13,11 +13,14 @@ const API = axios.create({
 // Add token to requests
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
+  console.log('Token being sent:', token ? token.slice(0,20)+'...' : 'null');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
+
+
 
 // Auth endpoints
 export const register = (data) => API.post('/auth/register', data);
