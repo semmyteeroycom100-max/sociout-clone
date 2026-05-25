@@ -23,7 +23,9 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=30 * 60,
     task_soft_time_limit=25 * 60,
-)
+    task_always_eager=True,   # <-- add this
+)   
+ 
 
 # Beat schedule for periodic tasks
 celery_app.conf.beat_schedule = {
