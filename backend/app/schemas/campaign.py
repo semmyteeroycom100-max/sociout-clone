@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, field_serializer  # add field_serializer
+from pydantic import BaseModel, field_validator, field_serializer
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -27,7 +27,6 @@ class CampaignCreate(BaseModel):
 
     @field_validator('video_url')
     def validate_youtube_url(cls, v):
-        # Accept any URL that contains a YouTube video ID and domain
         if not re.search(r'([a-zA-Z0-9_-]{11})', v):
             raise ValueError('Must be a valid YouTube URL')
         if not ('youtube.com' in v or 'youtu.be' in v):
@@ -57,16 +56,12 @@ class CampaignResponse(BaseModel):
     scheduled_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
 
- @field_serializer('action_type', 'status')
+    @field_serializer('action_type', 'status')
     def serialize_enum(self, value: Enum) -> str:
         return value.value
 
     class Config:
         from_attributes = True
-        # use_enum_values = True  # optional, but we already have explicit serializer
-    class Config:
-        from_attributes = True
-        use_enum_values = True   # ← This converts enums to their string values when serializing
 
 class CampaignActionResponse(BaseModel):
     id: int
