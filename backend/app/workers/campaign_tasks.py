@@ -3,6 +3,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 import asyncio
 import os
+import json
+import random
 from dotenv import load_dotenv
 
 from app.workers.celery_app import celery_app
@@ -102,9 +104,21 @@ def execute_campaign(self, campaign_id: int):
                         response = "Could not find channel ID"
                         
                 elif campaign.action_type == CampaignActionType.COMMENT:
-                    if campaign.comment_text:
+                    # Determine comment text from comment_list (random) or comment_text
+                    comment_text = None
+                    if campaign.comment_list:
+                        try:
+                            comments = json.loads(campaign.comment_list)
+                            if comments:
+                                comment_text = random.choice(comments)
+                        except:
+                            pass
+                    if not comment_text:
+                        comment_text = campaign.comment_text
+                    
+                    if comment_text:
                         result = loop.run_until_complete(
-                            youtube_service.post_comment(campaign.video_id, campaign.comment_text)
+                            youtube_service.post_comment(campaign.video_id, comment_text)
                         )
                         success = "error" not in result
                         response = str(result)
@@ -168,7 +182,7 @@ def execute_campaign(self, campaign_id: int):
         return {"error": str(e)}
 
 
-# ==================== NEW TASK FOR SCHEDULED CAMPAIGNS ====================
+# ==================== TASK FOR SCHEDULED CAMPAIGNS ====================
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.database import SessionLocal

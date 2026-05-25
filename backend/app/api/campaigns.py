@@ -45,7 +45,7 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
     return user
 
 
-@router.post("/create")   # response_model removed to avoid enum serialization
+@router.post("/create")   # response_model removed
 async def create_campaign(
     campaign_data: CampaignCreate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -59,12 +59,16 @@ async def create_campaign(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
     
+    # For COMMENT action, require either comment_text or comment_list
     if campaign_data.action_type == CampaignActionType.COMMENT:
-        if not campaign_data.comment_text or len(campaign_data.comment_text) < 2:
-            raise HTTPException(status_code=400, detail="Comment text is required")
+        if not (campaign_data.comment_text or campaign_data.comment_list):
+            raise HTTPException(status_code=400, detail="Comment text or list is required")
     
     if campaign_data.target_count < 1 or campaign_data.target_count > 100:
         raise HTTPException(status_code=400, detail="Target count must be between 1 and 100")
+    
+    # Convert comment_list to JSON string if present
+    comment_list_json = json.dumps(campaign_data.comment_list) if campaign_data.comment_list else None
     
     campaign = Campaign(
         user_id=user.id,
@@ -74,11 +78,32 @@ async def create_campaign(
         action_type=campaign_data.action_type,
         target_count=campaign_data.target_count,
         comment_text=campaign_data.comment_text,
-        # comment_list will be handled later if needed
+        comment_list=comment_list_json,   # <-- store JSON array
         status=CampaignStatus.PENDING,
         scheduled_at=campaign_data.scheduled_at
     )
     
+    db.add(campaign)
+    db.commit()
+    db.refresh(campaign)
+    
+    # Return dictionary (as before)
+    return {
+        "id": campaign.id,
+        "name": campaign.name,
+        "video_url": campaign.video_url,
+        "video_id": campaign.video_id,
+        "action_type": campaign.action_type.value,
+        "target_count": campaign.target_count,
+        "completed_count": campaign.completed_count,
+        "status": campaign.status.value,
+        "error_message": campaign.error_message,
+        "created_at": campaign.created_at,
+        "updated_at": campaign.updated_at,
+        "scheduled_at": campaign.scheduled_at,
+        "started_at": campaign.started_at,
+    }
+
     db.add(campaign)
     db.commit()
     db.refresh(campaign)
