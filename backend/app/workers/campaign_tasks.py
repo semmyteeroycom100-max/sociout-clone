@@ -65,104 +65,93 @@ def execute_campaign(self, campaign_id: int):
             db.commit()
             return {"error": "No YouTube token found"}
         
-        # Create YouTube service
-        youtube_service = YouTubeService(oauth_token.access_token)
-        
-        # Run actions asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        for i in range(campaign.target_count):
-            try:
-                success = False
-                response = None
-                
-                if campaign.action_type == CampaignActionType.LIKE:
-                    result = loop.run_until_complete(
-                        youtube_service.like_video(campaign.video_id)
-                    )
-                    success = "error" not in result
-                    response = str(result)
+        # Define async function to perform actions
+        async def run_actions():
+            youtube_service = YouTubeService(oauth_token.access_token)
+            results = []
+            for i in range(campaign.target_count):
+                try:
+                    success = False
+                    response = None
                     
-                elif campaign.action_type == CampaignActionType.SUBSCRIBE:
-                    if not campaign.channel_id:
-                        # Extract channel ID from video
-                        video_info = loop.run_until_complete(
-                            youtube_service.get_video_info(campaign.video_id)
-                        )
-                        campaign.channel_id = video_info.get("channel_id")
-                        db.commit()
-                    
-                    if campaign.channel_id:
-                        result = loop.run_until_complete(
-                            youtube_service.subscribe_to_channel(campaign.channel_id)
-                        )
+                    if campaign.action_type == CampaignActionType.LIKE:
+                        result = await youtube_service.like_video(campaign.video_id)
                         success = "error" not in result
                         response = str(result)
-                    else:
-                        success = False
-                        response = "Could not find channel ID"
                         
-                elif campaign.action_type == CampaignActionType.COMMENT:
-                    # Determine comment text from comment_list (random) or comment_text
-                    comment_text = None
-                    if campaign.comment_list:
-                        try:
-                            comments = json.loads(campaign.comment_list)
-                            if comments:
-                                comment_text = random.choice(comments)
-                        except:
-                            pass
-                    if not comment_text:
-                        comment_text = campaign.comment_text
+                    elif campaign.action_type == CampaignActionType.SUBSCRIBE:
+                        if not campaign.channel_id:
+                            video_info = await youtube_service.get_video_info(campaign.video_id)
+                            campaign.channel_id = video_info.get("channel_id")
+                            db.commit()
+                        
+                        if campaign.channel_id:
+                            result = await youtube_service.subscribe_to_channel(campaign.channel_id)
+                            success = "error" not in result
+                            response = str(result)
+                        else:
+                            success = False
+                            response = "Could not find channel ID"
+                            
+                    elif campaign.action_type == CampaignActionType.COMMENT:
+                        # Determine comment text
+                        comment_text = None
+                        if campaign.comment_list:
+                            try:
+                                comments = json.loads(campaign.comment_list)
+                                if comments:
+                                    comment_text = random.choice(comments)
+                            except:
+                                pass
+                        if not comment_text:
+                            comment_text = campaign.comment_text
+                        
+                        if comment_text:
+                            result = await youtube_service.post_comment(campaign.video_id, comment_text)
+                            success = "error" not in result
+                            response = str(result)
+                        else:
+                            success = False
+                            response = "No comment text provided"
                     
-                    if comment_text:
-                        result = loop.run_until_complete(
-                            youtube_service.post_comment(campaign.video_id, comment_text)
-                        )
-                        success = "error" not in result
-                        response = str(result)
-                    else:
-                        success = False
-                        response = "No comment text provided"
-                
-                # Record action
-                action = CampaignAction(
-                    campaign_id=campaign.id,
-                    action_index=i + 1,
-                    success=success,
-                    youtube_response=response[:500] if response else None,
-                    error_message=None if success else response[:500]
-                )
-                db.add(action)
-                
-                # Update campaign progress
-                campaign.completed_count = i + 1
-                db.commit()
-                
-                # Update Celery task state with progress
-                self.update_state(
-                    state="PROGRESS",
-                    meta={
-                        "current": i + 1,
-                        "total": campaign.target_count,
-                        "status": f"Completed {i + 1} of {campaign.target_count} actions"
-                    }
-                )
-                
-            except Exception as e:
-                # Record failed action
-                action = CampaignAction(
-                    campaign_id=campaign.id,
-                    action_index=i + 1,
-                    success=False,
-                    error_message=str(e)[:500]
-                )
-                db.add(action)
-                campaign.completed_count = i + 1
-                db.commit()
-        
-        loop.close()
+                    # Record action
+                    action = CampaignAction(
+                        campaign_id=campaign.id,
+                        action_index=i + 1,
+                        success=success,
+                        youtube_response=response[:500] if response else None,
+                        error_message=None if success else response[:500]
+                    )
+                    db.add(action)
+                    
+                    # Update progress
+                    campaign.completed_count = i + 1
+                    db.commit()
+                    
+                    # Update Celery task state
+                    self.update_state(
+                        state="PROGRESS",
+                        meta={
+                            "current": i + 1,
+                            "total": campaign.target_count,
+                            "status": f"Completed {i + 1} of {campaign.target_count} actions"
+                        }
+                    )
+                except Exception as e:
+                    action = CampaignAction(
+                        campaign_id=campaign.id,
+                        action_index=i + 1,
+                        success=False,
+                        error_message=str(e)[:500]
+                    )
+                    db.add(action)
+                    campaign.completed_count = i + 1
+                    db.commit()
+            
+            return results
+
+        # Run the async function
+        asyncio.run(run_actions())
         
         # Mark campaign as completed
         campaign.status = CampaignStatus.COMPLETED
@@ -182,7 +171,7 @@ def execute_campaign(self, campaign_id: int):
         return {"error": str(e)}
 
 
-# ==================== TASK FOR SCHEDULED CAMPAIGNS ====================
+# Task for scheduled campaigns (unchanged)
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
@@ -200,7 +189,6 @@ def start_scheduled_campaigns():
     ).all()
     
     for camp in campaigns:
-        # Use the existing execute_campaign task (defined above)
         execute_campaign.delay(camp.id)
         camp.started_at = now
         db.add(camp)
