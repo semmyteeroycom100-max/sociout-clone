@@ -11,7 +11,9 @@ import {
   PlusCircle,
   LogOut,
   TrendingUp,
-  Clock
+  Clock,
+  Save,
+  Templates
 } from 'lucide-react';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
@@ -22,7 +24,14 @@ function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [youtubeConnected, setYoutubeConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const navigate = useNavigate();
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorVisible, setErrorVisible] = useState(false);
+
+  
 
   // Campaign form state
   const [formData, setFormData] = useState({
@@ -45,6 +54,7 @@ function Dashboard() {
     loadUser();
     loadCampaigns();
     checkYoutubeStatus();
+    loadTemplates();
   }, []);
 
   const loadUser = async () => {
@@ -84,6 +94,129 @@ function Dashboard() {
     }
   };
 
+  const loadTemplates = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/templates`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      setTemplates(data);
+    } catch (err) {
+      console.error('Failed to load templates', err);
+    }
+  };
+
+  const saveAsTemplate = async () => {
+  setSavingTemplate(true);
+  try {
+    const token = localStorage.getItem('token');
+    const payload = { ... };
+    const response = await fetch(`${API_BASE}/templates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    if (response.ok) {
+      showError('Campaign saved as template'); // Actually success message, but we can use a success variant later
+      loadTemplates();
+    } else {
+      let msg = 'Failed to save template';
+      const data = await response.json();
+      if (data.detail) msg = data.detail;
+      showError(msg);
+    }
+  } catch (err) {
+    showError('Network error: could not save template');
+  } finally {
+    setSavingTemplate(false);
+  }
+};
+      const response = await fetch(`${API_BASE}/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      if (response.ok) {
+        alert('Campaign saved as template');
+        loadTemplates();
+      } else {
+        alert('Failed to save template');
+      }
+    } catch (err) {
+      alert('Error saving template');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const applyTemplate = (template) => {
+    setFormData({
+      name: template.name,
+      video_url: template.video_url,
+      action_type: template.action_type,
+      target_count: template.target_count
+    });
+    if (template.action_type === 'COMMENT') {
+      if (template.comment_list && template.comment_list.length) {
+        setCommentListText(template.comment_list.join('\n'));
+      } else if (template.comment_text) {
+        setCommentListText(template.comment_text);
+      } else {
+        setCommentListText('');
+      }
+    } else {
+      setCommentListText('');
+    }
+    setShowModal(true);
+    setShowTemplates(false);
+  };
+
+  const deleteTemplate = async (templateId) => {
+    if (!confirm('Delete this template?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/templates/${templateId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        loadTemplates();
+      } else {
+        alert('Failed to delete template');
+      }
+    } catch (err) {
+      alert('Error deleting template');
+    }
+  };
+
+ const downloadCSV = async (campaignId) => {
+  const token = localStorage.getItem('token');
+  try {
+    const response = await fetch(`${API_BASE}/campaigns/${campaignId}/export`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      let msg = 'Export failed';
+      const data = await response.json();
+      if (data.detail) msg = data.detail;
+      showError(msg);
+      return;
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campaign_${campaignId}_export.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    showError('Network error: could not download CSV');
+  }
+};
+
   const handleCreateCampaign = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -105,29 +238,39 @@ function Dashboard() {
       setCommentListText('');
       loadCampaigns();
     } catch (err) {
-      alert('Failed to create campaign');
-    } finally {
-      setLoading(false);
+  let msg = 'Failed to create campaign';
+  if (err.response?.data?.detail) {
+    const detail = err.response.data.detail;
+    if (Array.isArray(detail)) {
+      msg = detail.map(d => d.msg).join(', ');
+    } else if (typeof detail === 'string') {
+      msg = detail;
     }
-  };
+  } else if (err.message) {
+    msg = err.message;
+  }
+  showError(msg);
+}
+ };
 
   const handleStartCampaign = async (id) => {
-    try {
-      const response = await fetch(`${API_BASE}/campaigns/${id}/start`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.ok) {
-        loadCampaigns();
-      } else {
-        alert('Failed to start campaign');
-      }
-    }catch (err) {
-  console.error('Full error:', err);
-  const errorMessage = err.response?.data?.detail || err.message || 'Unknown error';
-  alert('Failed to create campaign: ' + JSON.stringify(errorMessage));
+  try {
+    const response = await fetch(`${API_BASE}/campaigns/${id}/start`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    });
+    if (response.ok) {
+      loadCampaigns();
+    } else {
+      let msg = 'Failed to start campaign';
+      const data = await response.json();
+      if (data.detail) msg = data.detail;
+      showError(msg);
     }
-  };
+  } catch (err) {
+    showError('Network error: could not start campaign');
+  }
+};
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -159,6 +302,12 @@ function Dashboard() {
     completed: campaigns.filter(c => c.status === 'completed').length,
     totalActions: campaigns.reduce((sum, c) => sum + (c.completed_count || 0), 0)
   };
+  
+  const showError = (msg) => {
+    setErrorMessage(msg);
+    setErrorVisible(true);
+    setTimeout(() => setErrorVisible(false), 5000); // auto-hide after 5s
+};   
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -180,7 +329,7 @@ function Dashboard() {
               <Video className="w-5 h-5" />
               <span>Campaigns</span>
             </a>
-           <a href="/analytics" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
+            <a href="#" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
               <TrendingUp className="w-5 h-5" />
               <span>Analytics</span>
             </a>
@@ -221,10 +370,52 @@ function Dashboard() {
 
       {/* Main Content */}
       <main className="ml-64 p-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-gray-500">Manage your YouTube automation campaigns</p>
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+            <p className="text-gray-500">Manage your YouTube automation campaigns</p>
+          </div>
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition"
+          >
+            <Templates className="w-5 h-5" />
+            Templates ({templates.length})
+          </button>
         </div>
+
+        {/* Templates Panel */}
+        {showTemplates && templates.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-8">
+            <h3 className="font-semibold text-gray-800 mb-3">Your Templates</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {templates.map(tpl => (
+                <div key={tpl.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium">{tpl.name}</p>
+                    <p className="text-xs text-gray-500">{tpl.action_type} · {tpl.target_count} actions</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => applyTemplate(tpl)}
+                      className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                    >
+                      Use
+                    </button>
+                    <button
+                      onClick={() => deleteTemplate(tpl.id)}
+                      className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-2">
@@ -321,6 +512,14 @@ function Dashboard() {
                         <span className="text-sm">Campaign in progress...</span>
                       </div>
                     )}
+                    {campaign.status === 'completed' && (
+                      <button
+                        onClick={() => downloadCSV(campaign.id)}
+                        className="w-full mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium"
+                      >
+                        📥 Download CSV
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -329,7 +528,7 @@ function Dashboard() {
         </div>
       </main>
 
-      {/* Campaign Creation Modal – SCROLLABLE FIX APPLIED */}
+      {/* Campaign Creation Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6">
@@ -373,8 +572,19 @@ function Dashboard() {
               )}
 
               <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={saveAsTemplate}
+                  disabled={savingTemplate}
+                  className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingTemplate ? 'Saving...' : 'Save as Template'}
+                </button>
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition disabled:opacity-50">{loading ? 'Creating...' : 'Create Campaign'}</button>
+                <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition disabled:opacity-50">
+                  {loading ? 'Creating...' : 'Create Campaign'}
+                </button>
               </div>
             </form>
           </div>
