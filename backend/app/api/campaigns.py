@@ -12,7 +12,7 @@ from app.models.user import User, Campaign, CampaignStatus, CampaignActionType, 
 from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignDetailResponse
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
-from app.services.email import send_campaign_completion_email
+# from app.services.email import send_campaign_completion_email  # TEMPORARILY DISABLED
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
@@ -46,7 +46,7 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
     return user
 
 
-@router.post("/create")   # response_model removed
+@router.post("/create")
 async def create_campaign(
     campaign_data: CampaignCreate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -163,7 +163,6 @@ async def start_campaign(
                     success = False
                     response = "Could not find channel ID"
             elif campaign.action_type == CampaignActionType.COMMENT:
-                # Use comment_text (simplified; comment_list can be added later)
                 comment_text = campaign.comment_text
                 if not comment_text:
                     success = False
@@ -204,19 +203,22 @@ async def start_campaign(
             actions_log.append({"index": i+1, "success": False, "error": str(e)[:200]})
     
     # Final status
-    send_campaign_completion_email(
-         to_email=user.email,
-         campaign_name=campaign.name,
-         status=campaign.status.value,
-         successful_actions=successes,
-         total_actions=campaign.target_count
-)
     if successes > 0:
         campaign.status = CampaignStatus.COMPLETED
     else:
         campaign.status = CampaignStatus.FAILED
         campaign.error_message = "All actions failed"
     db.commit()
+    
+    # Email notification temporarily disabled (resend not installed)
+    # from app.services.email import send_campaign_completion_email
+    # send_campaign_completion_email(
+    #     to_email=user.email,
+    #     campaign_name=campaign.name,
+    #     status=campaign.status.value,
+    #     successful_actions=successes,
+    #     total_actions=campaign.target_count
+    # )
     
     return {
         "campaign_id": campaign.id,
@@ -288,6 +290,8 @@ async def get_campaign_status(
         "scheduled_at": campaign.scheduled_at,
         "started_at": campaign.started_at,
     }
+
+
 @router.get("/{campaign_id}/export")
 async def export_campaign_csv(
     campaign_id: int,
