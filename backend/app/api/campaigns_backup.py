@@ -1,18 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import re
 import json
-from datetime import datetime
 
 from app.database import get_db
-from app.models.user import User, Campaign, CampaignStatus, CampaignActionType, OAuthToken, CampaignAction
+from app.models.user import User, Campaign, CampaignStatus, CampaignActionType
 from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignDetailResponse
 from app.core.auth import decode_access_token
+from app.workers.campaign_tasks import execute_campaign
 from app.services.youtube import YouTubeService
-from app.services.email import send_campaign_completion_email
+from app.api.oauth import get_youtube_token
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
@@ -79,7 +78,7 @@ async def create_campaign(
         action_type=campaign_data.action_type,
         target_count=campaign_data.target_count,
         comment_text=campaign_data.comment_text,
-        comment_list=comment_list_json,
+        comment_list=comment_list_json,   # <-- store JSON array
         status=CampaignStatus.PENDING,
         scheduled_at=campaign_data.scheduled_at
     )
@@ -88,7 +87,28 @@ async def create_campaign(
     db.commit()
     db.refresh(campaign)
     
-    # Return dictionary with enum values as strings
+    # Return dictionary (as before)
+    return {
+        "id": campaign.id,
+        "name": campaign.name,
+        "video_url": campaign.video_url,
+        "video_id": campaign.video_id,
+        "action_type": campaign.action_type.value,
+        "target_count": campaign.target_count,
+        "completed_count": campaign.completed_count,
+        "status": campaign.status.value,
+        "error_message": campaign.error_message,
+        "created_at": campaign.created_at,
+        "updated_at": campaign.updated_at,
+        "scheduled_at": campaign.scheduled_at,
+        "started_at": campaign.started_at,
+    }
+
+    db.add(campaign)
+    db.commit()
+    db.refresh(campaign)
+    
+    # Return a dictionary with enum values converted to strings
     return {
         "id": campaign.id,
         "name": campaign.name,
@@ -112,8 +132,9 @@ async def start_campaign(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Start a campaign – executes YouTube API calls directly (no Celery)"""
+    """Start a campaign"""
     user = get_current_user_from_token(credentials, db)
+    
     campaign = db.query(Campaign).filter(
         Campaign.id == campaign_id,
         Campaign.user_id == user.id
@@ -121,110 +142,15 @@ async def start_campaign(
     
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    
     if campaign.status != CampaignStatus.PENDING:
         raise HTTPException(status_code=400, detail=f"Campaign already {campaign.status.value}")
     
-    # Get YouTube token
-    oauth_token = db.query(OAuthToken).filter(
-        OAuthToken.user_id == user.id,
-        OAuthToken.provider == "google"
-    ).first()
-    if not oauth_token:
-        campaign.status = CampaignStatus.FAILED
-        campaign.error_message = "YouTube not connected"
-        db.commit()
-        raise HTTPException(status_code=401, detail="YouTube not connected")
-    
-    # Mark as running
-    campaign.status = CampaignStatus.RUNNING
-    campaign.started_at = datetime.utcnow()
+    task = execute_campaign.delay(campaign_id)
+    campaign.celery_task_id = task.id
     db.commit()
     
-    yt = YouTubeService(oauth_token.access_token)
-    successes = 0
-    actions_log = []
-    
-    for i in range(campaign.target_count):
-        try:
-            if campaign.action_type == CampaignActionType.LIKE:
-                result = await yt.like_video(campaign.video_id)
-                success = "error" not in result
-                response = str(result)
-            elif campaign.action_type == CampaignActionType.SUBSCRIBE:
-                if not campaign.channel_id:
-                    video_info = await yt.get_video_info(campaign.video_id)
-                    campaign.channel_id = video_info.get("channel_id")
-                    db.commit()
-                if campaign.channel_id:
-                    result = await yt.subscribe_to_channel(campaign.channel_id)
-                    success = "error" not in result
-                    response = str(result)
-                else:
-                    success = False
-                    response = "Could not find channel ID"
-            elif campaign.action_type == CampaignActionType.COMMENT:
-                # Use comment_text (simplified; comment_list can be added later)
-                comment_text = campaign.comment_text
-                if not comment_text:
-                    success = False
-                    response = "No comment text provided"
-                else:
-                    result = await yt.post_comment(campaign.video_id, comment_text)
-                    success = "error" not in result
-                    response = str(result)
-            else:
-                success = False
-                response = "Unknown action type"
-            
-            # Record action
-            action = CampaignAction(
-                campaign_id=campaign.id,
-                action_index=i+1,
-                success=success,
-                youtube_response=response[:500] if response else None,
-                error_message=None if success else response[:500]
-            )
-            db.add(action)
-            if success:
-                successes += 1
-            campaign.completed_count = i+1
-            db.commit()
-            actions_log.append({"index": i+1, "success": success, "response": response[:200]})
-            
-        except Exception as e:
-            action = CampaignAction(
-                campaign_id=campaign.id,
-                action_index=i+1,
-                success=False,
-                error_message=str(e)[:500]
-            )
-            db.add(action)
-            campaign.completed_count = i+1
-            db.commit()
-            actions_log.append({"index": i+1, "success": False, "error": str(e)[:200]})
-    
-    # Final status
-    send_campaign_completion_email(
-         to_email=user.email,
-         campaign_name=campaign.name,
-         status=campaign.status.value,
-         successful_actions=successes,
-         total_actions=campaign.target_count
-)
-    if successes > 0:
-        campaign.status = CampaignStatus.COMPLETED
-    else:
-        campaign.status = CampaignStatus.FAILED
-        campaign.error_message = "All actions failed"
-    db.commit()
-    
-    return {
-        "campaign_id": campaign.id,
-        "successful_actions": successes,
-        "total_actions": campaign.target_count,
-        "status": campaign.status.value,
-        "actions": actions_log
-    }
+    return {"campaign_id": campaign_id, "task_id": task.id, "status": "queued"}
 
 
 @router.get("/")
@@ -241,6 +167,7 @@ async def list_campaigns(
         Campaign.user_id == user.id
     ).order_by(desc(Campaign.created_at)).offset(skip).limit(limit).all()
     
+    # Convert list of SQLAlchemy objects to dicts with enum values as strings
     result = []
     for c in campaigns:
         result.append({
@@ -288,44 +215,3 @@ async def get_campaign_status(
         "scheduled_at": campaign.scheduled_at,
         "started_at": campaign.started_at,
     }
-@router.get("/{campaign_id}/export")
-async def export_campaign_csv(
-    campaign_id: int,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Export campaign actions as CSV file"""
-    user = get_current_user_from_token(credentials, db)
-    campaign = db.query(Campaign).filter(
-        Campaign.id == campaign_id,
-        Campaign.user_id == user.id
-    ).first()
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    actions = db.query(CampaignAction).filter(
-        CampaignAction.campaign_id == campaign_id
-    ).order_by(CampaignAction.action_index).all()
-    
-    import csv
-    from io import StringIO
-    from fastapi.responses import StreamingResponse
-    
-    output = StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Action Index", "Success", "YouTube Response", "Error Message", "Created At"])
-    for action in actions:
-        writer.writerow([
-            action.action_index,
-            "Yes" if action.success else "No",
-            action.youtube_response or "",
-            action.error_message or "",
-            action.created_at.isoformat() if action.created_at else ""
-        ])
-    
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=campaign_{campaign_id}_export.csv"}
-    )

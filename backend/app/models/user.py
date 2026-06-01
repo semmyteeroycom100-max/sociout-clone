@@ -91,6 +91,22 @@ class CampaignAction(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     campaign = relationship("Campaign", back_populates="actions")
+class CampaignTemplate(Base):
+    __tablename__ = "campaign_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    video_url = Column(String, nullable=False)
+    action_type = Column(Enum(CampaignActionType), nullable=False)
+    target_count = Column(Integer, nullable=False)
+    comment_text = Column(Text, nullable=True)
+    comment_list = Column(Text, nullable=True)   # JSON array
+    scheduled_days_offset = Column(Integer, nullable=True)  # optional: schedule offset in days
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    owner = relationship("User", back_populates="templates")
+    templates = relationship("CampaignTemplate", back_populates="owner", cascade="all, delete-orphan")
 class ThumbnailTest(Base):
     __tablename__ = "thumbnail_tests"
 

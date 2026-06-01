@@ -19,18 +19,15 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 @router.get("/google")
 async def auth_google(request: Request):
-    """Start Google OAuth flow"""
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")  
-    return await oauth.google.authorize_redirect(request, redirect_uri)
-
-@router.get("/google")
-async def auth_google(request: Request):
+    """Start Google OAuth flow – request offline access for refresh token"""
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
     return await oauth.google.authorize_redirect(
         request, redirect_uri,
         access_type="offline",
         prompt="consent"
     )
+
+
 @router.get("/google/callback")
 async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
     """Handle Google OAuth callback"""
@@ -57,7 +54,7 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(user)
         
-        # Store OAuth tokens
+        # Store OAuth tokens (includes refresh_token if granted)
         expires_at = None
         if "expires_in" in token:
             expires_at = datetime.utcnow().timestamp() + token["expires_in"]
@@ -131,3 +128,23 @@ def get_youtube_token(user_id: int, db: Session):
         return None
     
     return oauth_token.access_token
+@router.post("/reset")
+async def reset_youtube_connection(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Delete the authenticated user's YouTube OAuth token"""
+    token_data = credentials.credentials
+    payload = decode_access_token(token_data)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Delete the OAuth token
+    deleted = db.query(OAuthToken).filter(OAuthToken.user_id == user.id).delete()
+    db.commit()
+    
+    return {"message": "YouTube connection reset", "deleted": deleted}

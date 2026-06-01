@@ -6,8 +6,11 @@ from dotenv import load_dotenv
 import os
 import secrets
 
+
 from app.database import engine, Base
 from app.api import auth, users, oauth, youtube, campaigns, password_reset, admin, analytics, thumbnail_test
+from app.api import templates  
+
 
 load_dotenv()
 
@@ -54,6 +57,7 @@ app.include_router(campaigns.router)
 app.include_router(admin.router)
 app.include_router(analytics.router)
 app.include_router(thumbnail_test.router)
+app.include_router(templates.router)
 
 @app.get("/")
 async def root():
