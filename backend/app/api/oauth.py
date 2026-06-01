@@ -148,3 +148,23 @@ async def reset_youtube_connection(
     db.commit()
     
     return {"message": "YouTube connection reset", "deleted": deleted}
+@router.post("/youtube/reset")
+async def reset_youtube_connection(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Delete the authenticated user's YouTube OAuth token"""
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Delete the OAuth token
+    deleted = db.query(OAuthToken).filter(OAuthToken.user_id == user.id).delete()
+    db.commit()
+    
+    return {"message": "YouTube connection reset", "deleted": deleted}
