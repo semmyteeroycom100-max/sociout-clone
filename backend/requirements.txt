@@ -17,3 +17,4 @@ email-validator==2.1.0
 itsdangerous==2.1.2
 google-api-python-client==2.128.0
 python-multipart==0.0.20
+resend

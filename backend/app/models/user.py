@@ -19,8 +19,9 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     campaigns = relationship("Campaign", back_populates="owner")
-    thumbnail_tests = relationship("ThumbnailTest", back_populates="owner")
     oauth_tokens = relationship("OAuthToken", back_populates="user")
+    templates = relationship("CampaignTemplate", back_populates="owner")
+    thumbnail_tests = relationship("ThumbnailTest", back_populates="owner")
 
 
 class OAuthToken(Base):
@@ -66,7 +67,7 @@ class Campaign(Base):
     target_count = Column(Integer, nullable=False)
     completed_count = Column(Integer, default=0)
     comment_text = Column(Text, nullable=True)
-    comment_list = Column(Text, nullable=True)        # JSON array
+    comment_list = Column(Text, nullable=True)
     status = Column(Enum(CampaignStatus), default=CampaignStatus.PENDING)
     celery_task_id = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
@@ -91,6 +92,8 @@ class CampaignAction(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     campaign = relationship("Campaign", back_populates="actions")
+
+
 class CampaignTemplate(Base):
     __tablename__ = "campaign_templates"
 
@@ -101,40 +104,16 @@ class CampaignTemplate(Base):
     action_type = Column(Enum(CampaignActionType), nullable=False)
     target_count = Column(Integer, nullable=False)
     comment_text = Column(Text, nullable=True)
-    comment_list = Column(Text, nullable=True)   # JSON array
-    scheduled_days_offset = Column(Integer, nullable=True)  # optional: schedule offset in days
+    comment_list = Column(Text, nullable=True)
+    scheduled_days_offset = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     owner = relationship("User", back_populates="templates")
-    templates = relationship("CampaignTemplate", back_populates="owner", cascade="all, delete-orphan")
-class ThumbnailTest(Base):
-    __tablename__ = "thumbnail_tests"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    video_url = Column(String, nullable=False)
-    video_id = Column(String, nullable=False)  # extracted
-    thumbnail_a_url = Column(String, nullable=False)
-    thumbnail_b_url = Column(String, nullable=False)
-    impressions_a = Column(Integer, default=0)
-    impressions_b = Column(Integer, default=0)
-    clicks_a = Column(Integer, default=0)
-    clicks_b = Column(Integer, default=0)
-    status = Column(String, default="running")  # running, completed
-    winner = Column(String, nullable=True)      # 'a' or 'b'
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    owner = relationship("User", back_populates="thumbnail_tests")
 
 class ThumbnailTest(Base):
     __tablename__ = "thumbnail_tests"
-    __table_args__ = {'extend_existing': True}
-    
-    # The rest of your model's columns remain below this line
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    # ... etc ...
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     video_url = Column(String, nullable=False)

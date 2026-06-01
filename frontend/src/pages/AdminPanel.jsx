@@ -6,6 +6,7 @@ const API_BASE = 'https://sociout-backend.onrender.com/api';
 function AdminPanel() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [batchEmails, setBatchEmails] = useState('');
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ function AdminPanel() {
     }
     loadStats();
     loadUsers();
+    loadCampaigns();
   }, []);
 
   const loadStats = async () => {
@@ -52,10 +54,22 @@ function AdminPanel() {
     setLoading(false);
   };
 
+  const loadCampaigns = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/admin/all-campaigns`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      setCampaigns(data);
+    } catch (err) {
+      console.error('Failed to load campaigns', err);
+    }
+  };
+
   const handleBatchCreate = async () => {
     const lines = batchEmails.split('\n');
     const usersData = [];
-    
     for (const line of lines) {
       if (line.trim()) {
         const [email, username, password] = line.split(',');
@@ -66,7 +80,6 @@ function AdminPanel() {
         });
       }
     }
-    
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_BASE}/admin/users/batch`, {
       method: 'POST',
@@ -76,7 +89,6 @@ function AdminPanel() {
       },
       body: JSON.stringify(usersData)
     });
-    
     const result = await response.json();
     alert(`Created: ${result.created?.length || 0}, Failed: ${result.failed?.length || 0}`);
     loadUsers();
@@ -97,7 +109,8 @@ function AdminPanel() {
           Logout
         </button>
       </div>
-      
+
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-4 rounded shadow">
           <h3 className="text-gray-500 text-sm">Total Users</h3>
@@ -116,7 +129,8 @@ function AdminPanel() {
           <p className="text-2xl font-bold text-blue-600">Sociout</p>
         </div>
       </div>
-      
+
+      {/* Batch Create Users */}
       <div className="bg-white p-6 rounded shadow mb-8">
         <h2 className="text-xl font-bold mb-4">Batch Create Users</h2>
         <textarea
@@ -136,8 +150,9 @@ function AdminPanel() {
           Format: email,username,password (one per line)
         </p>
       </div>
-      
-      <div className="bg-white p-6 rounded shadow">
+
+      {/* Users Table */}
+      <div className="bg-white p-6 rounded shadow mb-8">
         <h2 className="text-xl font-bold mb-4">Users ({users.length})</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -156,6 +171,39 @@ function AdminPanel() {
                   <td className="p-2">{user.email}</td>
                   <td className="p-2">{user.username}</td>
                   <td className="p-2">{new Date(user.created_at).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* All Campaigns Table (NEW) */}
+      <div className="bg-white p-6 rounded shadow">
+        <h2 className="text-xl font-bold mb-4">All Campaigns ({campaigns.length})</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-2 text-left">ID</th>
+                <th className="p-2 text-left">User ID</th>
+                <th className="p-2 text-left">Name</th>
+                <th className="p-2 text-left">Action</th>
+                <th className="p-2 text-left">Status</th>
+                <th className="p-2 text-left">Progress</th>
+                <th className="p-2 text-left">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.map(camp => (
+                <tr key={camp.id} className="border-t">
+                  <td className="p-2">{camp.id}</td>
+                  <td className="p-2">{camp.user_id}</td>
+                  <td className="p-2">{camp.name}</td>
+                  <td className="p-2">{camp.action_type}</td>
+                  <td className="p-2">{camp.status}</td>
+                  <td className="p-2">{camp.completed_count}/{camp.target_count}</td>
+                  <td className="p-2">{camp.created_at ? new Date(camp.created_at).toLocaleString() : '-'}</td>
                 </tr>
               ))}
             </tbody>
