@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime
 import os
@@ -11,6 +12,7 @@ from app.core.auth import create_access_token, decode_access_token
 from app.core.oauth_config import oauth
 
 router = APIRouter(prefix="/api/auth", tags=["Google OAuth"])
+security = HTTPBearer()
 
 # Get credentials from environment
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -114,40 +116,6 @@ async def get_youtube_status(request: Request, db: Session = Depends(get_db)):
     return {"connected": oauth_token is not None}
 
 
-def get_youtube_token(user_id: int, db: Session):
-    """Helper function to get valid YouTube token"""
-    oauth_token = db.query(OAuthToken).filter(
-        OAuthToken.user_id == user_id,
-        OAuthToken.provider == "google"
-    ).first()
-    
-    if not oauth_token:
-        return None
-    
-    if oauth_token.expires_at and oauth_token.expires_at <= datetime.utcnow():
-        return None
-    
-    return oauth_token.access_token
-@router.post("/reset")
-async def reset_youtube_connection(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Delete the authenticated user's YouTube OAuth token"""
-    token_data = credentials.credentials
-    payload = decode_access_token(token_data)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    email = payload.get("sub")
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Delete the OAuth token
-    deleted = db.query(OAuthToken).filter(OAuthToken.user_id == user.id).delete()
-    db.commit()
-    
-    return {"message": "YouTube connection reset", "deleted": deleted}
 @router.post("/youtube/reset")
 async def reset_youtube_connection(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -168,3 +136,19 @@ async def reset_youtube_connection(
     db.commit()
     
     return {"message": "YouTube connection reset", "deleted": deleted}
+
+
+def get_youtube_token(user_id: int, db: Session):
+    """Helper function to get valid YouTube token"""
+    oauth_token = db.query(OAuthToken).filter(
+        OAuthToken.user_id == user_id,
+        OAuthToken.provider == "google"
+    ).first()
+    
+    if not oauth_token:
+        return None
+    
+    if oauth_token.expires_at and oauth_token.expires_at <= datetime.utcnow():
+        return None
+    
+    return oauth_token.access_token
