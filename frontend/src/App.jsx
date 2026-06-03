@@ -11,6 +11,7 @@ import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ThumbnailTest from './pages/ThumbnailTest';
 import TermsOfService from './pages/TermsOfService';
+import Pricing from './pages/Pricing';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/thumbnail-test" element={<ThumbnailTest />} />
+        <Route path="/pricing" element={<Pricing />} />
 
       </Routes>
     </Router>

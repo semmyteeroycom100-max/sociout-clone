@@ -4,12 +4,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-resend.api_key = os.getenv("RESEND_API_KEY")
+resend.api_key = os.getenv("re_VVaXHvHb_Fh46dKjhzdPsNorrfzqAiw5E")
+FROM_EMAIL = os.getenv("sociout_clone")  # Must be verified in Resend
 
 def send_campaign_completion_email(to_email, campaign_name, status, successful_actions, total_actions):
-    """Send an email notification about campaign completion"""
     if not resend.api_key:
-        print("RESEND_API_KEY not set, skipping email")
+        print("RESEND_API_KEY not set")
+        return
+    if not FROM_EMAIL:
+        print("FROM_EMAIL not set")
+        return
+    if not to_email or '@' not in to_email:
+        print(f"Invalid recipient: {to_email}")
         return
 
     subject = f"Campaign '{campaign_name}' – {status}"
@@ -32,11 +38,11 @@ def send_campaign_completion_email(to_email, campaign_name, status, successful_a
     """
     try:
         resend.Emails.send(
-            from_=os.getenv("FROM_EMAIL", "notifications@sociout.com"),
+            from_=FROM_EMAIL,
             to=to_email,
             subject=subject,
             html=html
         )
-        print(f"Email sent to {to_email} for campaign {campaign_name}")
+        print(f"Email sent to {to_email} for {campaign_name}")
     except Exception as e:
         print(f"Failed to send email: {e}")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -12,7 +12,8 @@ from app.models.user import User, Campaign, CampaignStatus, CampaignActionType, 
 from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignDetailResponse
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
-# from app.services.email import send_campaign_completion_email  # TEMPORARILY DISABLED
+from app.services.webhook import send_webhook
+# from app.services.email import send_campaign_completion_email 
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
@@ -32,6 +33,19 @@ def extract_video_id(url: str) -> str:
         if match:
             return match.group(1)
     raise ValueError("Invalid YouTube URL")
+
+
+def extract_channel_id(url: str) -> str:
+    """Extract channel ID from YouTube channel URL"""
+    patterns = [
+        r'youtube\.com/channel/([UC][\w-]+)',
+        r'youtube\.com/@([\w-]+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
 
 
 def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: Session):
@@ -58,7 +72,8 @@ async def create_campaign(
     try:
         video_id = extract_video_id(str(campaign_data.video_url))
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+        # If video extraction fails, maybe it's a channel URL – store as is for subscribe
+        video_id = None
     
     # For COMMENT action, require either comment_text or comment_list
     if campaign_data.action_type == CampaignActionType.COMMENT:
@@ -81,7 +96,9 @@ async def create_campaign(
         comment_text=campaign_data.comment_text,
         comment_list=comment_list_json,
         status=CampaignStatus.PENDING,
-        scheduled_at=campaign_data.scheduled_at
+        scheduled_at=campaign_data.scheduled_at,
+        webhook_url=str(campaign_data.webhook_url) if hasattr(campaign_data, 'webhook_url') and campaign_data.webhook_url else None,
+        webhook_secret=campaign_data.webhook_secret if hasattr(campaign_data, 'webhook_secret') else None
     )
     
     db.add(campaign)
@@ -103,12 +120,15 @@ async def create_campaign(
         "updated_at": campaign.updated_at,
         "scheduled_at": campaign.scheduled_at,
         "started_at": campaign.started_at,
+        "webhook_url": campaign.webhook_url,
+        "webhook_secret": campaign.webhook_secret,
     }
 
 
 @router.post("/{campaign_id}/start")
 async def start_campaign(
     campaign_id: int,
+    background_tasks: BackgroundTasks,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
@@ -150,11 +170,18 @@ async def start_campaign(
                 result = await yt.like_video(campaign.video_id)
                 success = "error" not in result
                 response = str(result)
+                
             elif campaign.action_type == CampaignActionType.SUBSCRIBE:
-                if not campaign.channel_id:
+                # First try to get channel ID from video info
+                if not campaign.channel_id and campaign.video_id:
                     video_info = await yt.get_video_info(campaign.video_id)
                     campaign.channel_id = video_info.get("channel_id")
                     db.commit()
+                # If still no channel_id, try extracting from URL directly
+                if not campaign.channel_id:
+                    campaign.channel_id = extract_channel_id(str(campaign.video_url))
+                    db.commit()
+                
                 if campaign.channel_id:
                     result = await yt.subscribe_to_channel(campaign.channel_id)
                     success = "error" not in result
@@ -162,6 +189,7 @@ async def start_campaign(
                 else:
                     success = False
                     response = "Could not find channel ID"
+                    
             elif campaign.action_type == CampaignActionType.COMMENT:
                 comment_text = campaign.comment_text
                 if not comment_text:
@@ -210,7 +238,21 @@ async def start_campaign(
         campaign.error_message = "All actions failed"
     db.commit()
     
-    # Email notification temporarily disabled (resend not installed)
+    # Send webhook if URL is provided
+    if campaign.webhook_url and (campaign.status == CampaignStatus.COMPLETED or campaign.status == CampaignStatus.FAILED):
+        background_tasks.add_task(
+            send_webhook,
+            campaign.webhook_url,
+            campaign.id,
+            campaign.name,
+            campaign.status.value,
+            successes,
+            campaign.target_count,
+            str(campaign.video_url),
+            campaign.webhook_secret
+        )
+    
+    # Email notification (commented out if resend not installed)
     # from app.services.email import send_campaign_completion_email
     # send_campaign_completion_email(
     #     to_email=user.email,
@@ -259,6 +301,7 @@ async def list_campaigns(
             "updated_at": c.updated_at,
             "scheduled_at": c.scheduled_at,
             "started_at": c.started_at,
+            "webhook_url": c.webhook_url,
         })
     return result
 
@@ -289,6 +332,7 @@ async def get_campaign_status(
         "percentage": (campaign.completed_count / campaign.target_count * 100) if campaign.target_count > 0 else 0,
         "scheduled_at": campaign.scheduled_at,
         "started_at": campaign.started_at,
+        "webhook_url": campaign.webhook_url,
     }
 
 
@@ -313,7 +357,6 @@ async def export_campaign_csv(
     
     import csv
     from io import StringIO
-    from fastapi.responses import StreamingResponse
     
     output = StringIO()
     writer = csv.writer(output)

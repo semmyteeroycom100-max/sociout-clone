@@ -21,6 +21,7 @@ class User(Base):
     campaigns = relationship("Campaign", back_populates="owner")
     oauth_tokens = relationship("OAuthToken", back_populates="user")
     templates = relationship("CampaignTemplate", back_populates="owner")
+    subscription = relationship("UserSubscription", back_populates="user", uselist=False)
     thumbnail_tests = relationship("ThumbnailTest", back_populates="owner")
 
 
@@ -75,6 +76,9 @@ class Campaign(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
+    # Webhook fields (added for Phase 4)
+    webhook_url = Column(String, nullable=True)
+    webhook_secret = Column(String, nullable=True)
     
     owner = relationship("User", back_populates="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign")
@@ -109,6 +113,35 @@ class CampaignTemplate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     owner = relationship("User", back_populates="templates")
+
+
+class SubscriptionPlan(Base):
+    __tablename__ = "subscription_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)  # free, pro, business
+    price_monthly = Column(Integer, nullable=False)  # in cents (e.g., 1999 for $19.99)
+    actions_limit = Column(Integer, nullable=False)  # monthly action limit
+    stripe_price_id = Column(String, nullable=True)  # Stripe Price ID
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserSubscription(Base):
+    __tablename__ = "user_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    plan_id = Column(Integer, ForeignKey("subscription_plans.id"), nullable=False)
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    status = Column(String, default="active")  # active, cancelled, past_due
+    current_period_end = Column(DateTime, nullable=True)
+    actions_used_this_month = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="subscription")
+    plan = relationship("SubscriptionPlan")
 
 
 class ThumbnailTest(Base):
