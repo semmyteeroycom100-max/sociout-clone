@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import re
 import json
+import random
 from datetime import datetime
 
 from app.database import get_db
@@ -13,7 +14,7 @@ from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignDetai
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.services.webhook import send_webhook
-# from app.services.email import send_campaign_completion_email 
+# from app.services.email import send_campaign_completion_email
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
@@ -105,7 +106,6 @@ async def create_campaign(
     db.commit()
     db.refresh(campaign)
     
-    # Return dictionary with enum values as strings
     return {
         "id": campaign.id,
         "name": campaign.name,
@@ -190,30 +190,33 @@ async def start_campaign(
                     success = False
                     response = "Could not find channel ID"
                     
-          elif campaign.action_type == CampaignActionType.COMMENT:
-    # Pick a random comment from list or use single comment_text
-    comment_text = campaign.comment_text
-    if campaign.comment_list:
-        import json
-        try:
-            comments = json.loads(campaign.comment_list)
-            if comments and len(comments) > 0:
-                comment_text = random.choice(comments)
-        except:
-            pass
-    
-    if not comment_text or not comment_text.strip():
-        success = False
-        response = "No comment text provided"
-    else:
-        result = await yt.post_comment(campaign.video_id, comment_text)
-        if "error" in result:
-            success = False
-            response = result["error"]
-        else:
-            success = True
-            response = f"Comment posted: {comment_text[:50]}..."
-
+            elif campaign.action_type == CampaignActionType.COMMENT:
+                # Pick a random comment from list or use single comment_text
+                comment_text = campaign.comment_text
+                if campaign.comment_list:
+                    try:
+                        comments = json.loads(campaign.comment_list)
+                        if comments and len(comments) > 0:
+                            comment_text = random.choice(comments)
+                    except:
+                        pass
+                
+                if not comment_text or not comment_text.strip():
+                    success = False
+                    response = "No comment text provided"
+                else:
+                    result = await yt.post_comment(campaign.video_id, comment_text)
+                    if "error" in result:
+                        success = False
+                        response = result["error"]
+                    else:
+                        success = True
+                        response = f"Comment posted: {comment_text[:50]}..."
+            
+            else:
+                success = False
+                response = "Unknown action type"
+            
             # Record action
             action = CampaignAction(
                 campaign_id=campaign.id,
@@ -262,16 +265,6 @@ async def start_campaign(
             str(campaign.video_url),
             campaign.webhook_secret
         )
-    
-    # Email notification (commented out if resend not installed)
-    # from app.services.email import send_campaign_completion_email
-    # send_campaign_completion_email(
-    #     to_email=user.email,
-    #     campaign_name=campaign.name,
-    #     status=campaign.status.value,
-    #     successful_actions=successes,
-    #     total_actions=campaign.target_count
-    # )
     
     return {
         "campaign_id": campaign.id,
@@ -387,6 +380,8 @@ async def export_campaign_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=campaign_{campaign_id}_export.csv"}
     )
+
+
 @router.delete("/{campaign_id}")
 async def delete_campaign(
     campaign_id: int,
