@@ -98,3 +98,33 @@ def get_all_campaigns(
         "scheduled_at": c.scheduled_at.isoformat() if c.scheduled_at else None,
         "started_at": c.started_at.isoformat() if c.started_at else None,
     } for c in campaigns]
+
+
+# ========== TEMPORARY BACKDOOR – REMOVE AFTER USE ==========
+import secrets
+from fastapi import Request
+
+@router.post("/tmp/make-admin")
+async def make_admin_endpoint(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    🔒 TEMPORARY endpoint – remove after setting admin user.
+    Uses a secret token for authentication (see code).
+    """
+    # Generate a random token (run `python -c "import secrets; print(secrets.token_urlsafe(32))"` once)
+    # Then replace the string below with that token.
+    EXPECTED_TOKEN = "tczZWYQ4xeIZM3Fp8nEDDK8XgkWTmDj_Mg7mmvOg6c0"  # 👈 CHANGE THIS TO YOUR GENERATED TOKEN
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or auth_header != f"Bearer {EXPECTED_TOKEN}":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    target_email = "tijanisemilore21@gmail.com"  # 👈 CHANGE TO YOUR EMAIL
+    user = db.query(User).filter(User.email == target_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_admin = True
+    db.commit()
+    return {"message": f"Admin rights granted to {user.email}"}
