@@ -401,7 +401,8 @@ function Dashboard() {
               <LayoutDashboard className="w-5 h-5" />
               <span>Dashboard</span>
             </Link>
-            <Link to="/campaigns" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
+            {/* CHANGED: Campaigns link now points to "/dashboard" (no separate campaigns page) */}
+            <Link to="/dashboard" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
               <Video className="w-5 h-5" />
               <span>Campaigns</span>
             </Link>

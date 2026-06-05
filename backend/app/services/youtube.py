@@ -37,7 +37,7 @@ class YouTubeService:
         return await self._make_request("POST", url)
     
     async def unlike_video(self, video_id: str) -> Dict[str, Any]:
-        """Remove like from a YouTube video"""
+        """Remove like from a YouTube video (not used in campaigns, kept for completeness)"""
         url = f"{YOUTUBE_API_BASE}/videos/rate?id={video_id}&rating=none"
         return await self._make_request("POST", url)
     
@@ -60,7 +60,25 @@ class YouTubeService:
         return await self._make_request("DELETE", url)
     
     async def post_comment(self, video_id: str, text: str) -> Dict[str, Any]:
-        """Post a comment on a YouTube video (REAL API call)"""
+        """Post a comment on a YouTube video with validation and error handling."""
+        # --- VALIDATION (local, no API call) ---
+        if not text or not text.strip():
+            return {"error": "Comment cannot be empty", "status_code": 400}
+        
+        if len(text) > 1000:
+            return {"error": "Comment is too long (max 1000 characters)", "status_code": 400}
+        
+        if len(text) < 2:
+            return {"error": "Comment is too short", "status_code": 400}
+        
+        # Basic spam detection
+        spam_keywords = ["buy followers", "click here", "free subscribers", "bit.ly", "goo.gl", "http://", "https://"]
+        lower_text = text.lower()
+        for keyword in spam_keywords:
+            if keyword in lower_text:
+                return {"error": f"Comment looks like spam (contains '{keyword}')", "status_code": 400}
+        
+        # --- ACTUAL API CALL ---
         url = f"{YOUTUBE_API_BASE}/commentThreads?part=snippet"
         data = {
             "snippet": {
@@ -72,7 +90,29 @@ class YouTubeService:
                 }
             }
         }
-        return await self._make_request("POST", url, data=data)
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=self.headers, json=data)
+            
+            # --- ERROR HANDLING (user-friendly messages) ---
+            if response.status_code == 403:
+                error_text = response.text.lower()
+                if "commentsdisabled" in error_text or "comments disabled" in error_text:
+                    return {"error": "Comments are disabled on this video", "status_code": 403}
+                elif "spam" in error_text:
+                    return {"error": "YouTube's spam filter blocked your comment. Try a different wording.", "status_code": 403}
+                else:
+                    return {"error": "Permission denied. Make sure your YouTube account is connected.", "status_code": 403}
+            elif response.status_code == 400:
+                return {"error": "Invalid comment format or video ID.", "status_code": 400}
+            elif response.status_code == 404:
+                return {"error": "Video not found or unavailable.", "status_code": 404}
+            elif response.status_code >= 400:
+                return {"error": f"YouTube API error: {response.text[:200]}", "status_code": response.status_code}
+            
+            # Success
+            result = response.json()
+            return {"success": True, "comment_id": result.get("id", ""), "status_code": 200}
     
     async def get_video_info(self, video_id: str) -> Dict[str, Any]:
         """Get video metadata"""

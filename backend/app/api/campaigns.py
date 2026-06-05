@@ -190,19 +190,30 @@ async def start_campaign(
                     success = False
                     response = "Could not find channel ID"
                     
-            elif campaign.action_type == CampaignActionType.COMMENT:
-                comment_text = campaign.comment_text
-                if not comment_text:
-                    success = False
-                    response = "No comment text provided"
-                else:
-                    result = await yt.post_comment(campaign.video_id, comment_text)
-                    success = "error" not in result
-                    response = str(result)
-            else:
-                success = False
-                response = "Unknown action type"
-            
+          elif campaign.action_type == CampaignActionType.COMMENT:
+    # Pick a random comment from list or use single comment_text
+    comment_text = campaign.comment_text
+    if campaign.comment_list:
+        import json
+        try:
+            comments = json.loads(campaign.comment_list)
+            if comments and len(comments) > 0:
+                comment_text = random.choice(comments)
+        except:
+            pass
+    
+    if not comment_text or not comment_text.strip():
+        success = False
+        response = "No comment text provided"
+    else:
+        result = await yt.post_comment(campaign.video_id, comment_text)
+        if "error" in result:
+            success = False
+            response = result["error"]
+        else:
+            success = True
+            response = f"Comment posted: {comment_text[:50]}..."
+
             # Record action
             action = CampaignAction(
                 campaign_id=campaign.id,
@@ -376,3 +387,26 @@ async def export_campaign_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=campaign_{campaign_id}_export.csv"}
     )
+@router.delete("/{campaign_id}")
+async def delete_campaign(
+    campaign_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Delete a campaign (only if owned by current user and not running)"""
+    user = get_current_user_from_token(credentials, db)
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.user_id == user.id
+    ).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    if campaign.status == CampaignStatus.RUNNING:
+        raise HTTPException(status_code=400, detail="Cannot delete a running campaign. Stop it first.")
+    
+    db.delete(campaign)
+    db.commit()
+    
+    return {"message": "Campaign deleted successfully"}
