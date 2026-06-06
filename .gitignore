@@ -1,18 +1,15 @@
-# Python
-__pycache__/
-*.pyc
-venv/
-*.db
+# Admin / migration scripts (contain secrets or old DB URLs)
+set_admin*.py
+make_admin.py
+migrate_db.py
+add_columns.py
+check_*.py
+create_*_table.py
+inspect_*.py
 
-# Secrets (real .env files only)
-.env
-.env.local
-.env.production
+# Database backups
+*.sql
+*.dump
 
-# Node
-frontend/node_modules/
-frontend/dist/
-
-# IDE
-.vscode/
-.idea/
+# Any other local test files
+backend/sociout_backup.sql
