@@ -10,18 +10,17 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models.user import User, Campaign, CampaignStatus, CampaignActionType, OAuthToken, CampaignAction
-from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignDetailResponse
+from app.schemas.campaign import CampaignCreate
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.services.webhook import send_webhook
-from app.services.email import send_campaign_completion_email  
+from app.services.email import send_campaign_completion_email
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
 
 
 def extract_video_id(url: str) -> str:
-    """Extract YouTube video ID from URL"""
     patterns = [
         r'(?:youtube\.com\/watch\?v=)([\w-]+)',
         r'(?:youtu\.be\/)([\w-]+)',
@@ -37,7 +36,6 @@ def extract_video_id(url: str) -> str:
 
 
 def extract_channel_id(url: str) -> str:
-    """Extract channel ID from YouTube channel URL"""
     patterns = [
         r'youtube\.com/channel/([UC][\w-]+)',
         r'youtube\.com/@([\w-]+)',
@@ -59,6 +57,7 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
 
 async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: BackgroundTasks = None):
     """
@@ -106,7 +105,6 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                 if not campaign.channel_id:
                     campaign.channel_id = extract_channel_id(str(campaign.video_url))
                     db.commit()
-
                 if campaign.channel_id:
                     result = await yt.subscribe_to_channel(campaign.channel_id)
                     success = "error" not in result
@@ -124,7 +122,6 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                             comment_text = random.choice(comments)
                     except:
                         pass
-
                 if not comment_text or not comment_text.strip():
                     success = False
                     response = "No comment text provided"
@@ -191,7 +188,6 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                 campaign.webhook_secret
             )
         else:
-            # No background_tasks (scheduler) – send synchronously
             await send_webhook(
                 campaign.webhook_url,
                 campaign.id,
@@ -216,6 +212,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
 
     return successes, campaign.target_count, campaign.status.value, actions_log
 
+
 @router.post("/create")
 async def create_campaign(
     campaign_data: CampaignCreate,
@@ -224,44 +221,41 @@ async def create_campaign(
 ):
     """Create a new campaign"""
     user = get_current_user_from_token(credentials, db)
-    
+
     try:
         video_id = extract_video_id(str(campaign_data.video_url))
     except ValueError:
-        # If video extraction fails, maybe it's a channel URL – store as is for subscribe
         video_id = None
-    
-    # For COMMENT action, require either comment_text or comment_list
+
     if campaign_data.action_type == CampaignActionType.COMMENT:
         if not (campaign_data.comment_text or campaign_data.comment_list):
             raise HTTPException(status_code=400, detail="Comment text or list is required")
-    
+
     if campaign_data.target_count < 1 or campaign_data.target_count > 100:
         raise HTTPException(status_code=400, detail="Target count must be between 1 and 100")
-    
-    # Convert comment_list to JSON string if present
+
     comment_list_json = json.dumps(campaign_data.comment_list) if campaign_data.comment_list else None
-    
-  campaign = Campaign(
-    user_id=user.id,
-    name=campaign_data.name,
-    video_url=str(campaign_data.video_url),
-    video_id=video_id,
-    action_type=campaign_data.action_type,
-    target_count=campaign_data.target_count,
-    comment_text=campaign_data.comment_text,
-    comment_list=comment_list_json,
-    status=CampaignStatus.PENDING,
-    scheduled_at=campaign_data.scheduled_at,
-    webhook_url=str(campaign_data.webhook_url) if campaign_data.webhook_url else None,
-    webhook_secret=campaign_data.webhook_secret,   # ✅ no if/else needed (it's optional in schema)
-    platform=campaign_data.platform or "youtube"
-)
-    
+
+    campaign = Campaign(
+        user_id=user.id,
+        name=campaign_data.name,
+        video_url=str(campaign_data.video_url),
+        video_id=video_id,
+        action_type=campaign_data.action_type,
+        target_count=campaign_data.target_count,
+        comment_text=campaign_data.comment_text,
+        comment_list=comment_list_json,
+        status=CampaignStatus.PENDING,
+        scheduled_at=campaign_data.scheduled_at,
+        webhook_url=str(campaign_data.webhook_url) if campaign_data.webhook_url else None,
+        webhook_secret=campaign_data.webhook_secret,
+        platform=campaign_data.platform or "youtube"
+    )
+
     db.add(campaign)
     db.commit()
     db.refresh(campaign)
-    
+
     return {
         "id": campaign.id,
         "name": campaign.name,
@@ -278,6 +272,7 @@ async def create_campaign(
         "started_at": campaign.started_at,
         "webhook_url": campaign.webhook_url,
         "webhook_secret": campaign.webhook_secret,
+        "platform": campaign.platform,
     }
 
 
@@ -288,155 +283,23 @@ async def start_campaign(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Start a campaign – executes YouTube API calls directly (no Celery)"""
     user = get_current_user_from_token(credentials, db)
     campaign = db.query(Campaign).filter(
         Campaign.id == campaign_id,
         Campaign.user_id == user.id
     ).first()
-    
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     if campaign.status != CampaignStatus.PENDING:
         raise HTTPException(status_code=400, detail=f"Campaign already {campaign.status.value}")
-    
-    # Get YouTube token
-    oauth_token = db.query(OAuthToken).filter(
-        OAuthToken.user_id == user.id,
-        OAuthToken.provider == "google"
-    ).first()
-    if not oauth_token:
-        campaign.status = CampaignStatus.FAILED
-        campaign.error_message = "YouTube not connected"
-        db.commit()
-        raise HTTPException(status_code=401, detail="YouTube not connected")
-    
-    # Mark as running
-    campaign.status = CampaignStatus.RUNNING
-    campaign.started_at = datetime.utcnow()
-    db.commit()
-    
-    yt = YouTubeService(oauth_token.access_token)
-    successes = 0
-    actions_log = []
-    
-    for i in range(campaign.target_count):
-        try:
-            if campaign.action_type == CampaignActionType.LIKE:
-                result = await yt.like_video(campaign.video_id)
-                success = "error" not in result
-                response = str(result)
-                
-            elif campaign.action_type == CampaignActionType.SUBSCRIBE:
-                # First try to get channel ID from video info
-                if not campaign.channel_id and campaign.video_id:
-                    video_info = await yt.get_video_info(campaign.video_id)
-                    campaign.channel_id = video_info.get("channel_id")
-                    db.commit()
-                # If still no channel_id, try extracting from URL directly
-                if not campaign.channel_id:
-                    campaign.channel_id = extract_channel_id(str(campaign.video_url))
-                    db.commit()
-                
-                if campaign.channel_id:
-                    result = await yt.subscribe_to_channel(campaign.channel_id)
-                    success = "error" not in result
-                    response = str(result)
-                else:
-                    success = False
-                    response = "Could not find channel ID"
-                    
-            elif campaign.action_type == CampaignActionType.COMMENT:
-                # Pick a random comment from list or use single comment_text
-                comment_text = campaign.comment_text
-                if campaign.comment_list:
-                    try:
-                        comments = json.loads(campaign.comment_list)
-                        if comments and len(comments) > 0:
-                            comment_text = random.choice(comments)
-                    except:
-                        pass
-                
-                if not comment_text or not comment_text.strip():
-                    success = False
-                    response = "No comment text provided"
-                else:
-                    result = await yt.post_comment(campaign.video_id, comment_text)
-                    if "error" in result:
-                        success = False
-                        response = result["error"]
-                    else:
-                        success = True
-                        response = f"Comment posted: {comment_text[:50]}..."
-            
-            else:
-                success = False
-                response = "Unknown action type"
-            
-            # Record action
-            action = CampaignAction(
-                campaign_id=campaign.id,
-                action_index=i+1,
-                success=success,
-                youtube_response=response[:500] if response else None,
-                error_message=None if success else response[:500]
-            )
-            db.add(action)
-            if success:
-                successes += 1
-            campaign.completed_count = i+1
-            db.commit()
-            actions_log.append({"index": i+1, "success": success, "response": response[:200]})
-            
-        except Exception as e:
-            action = CampaignAction(
-                campaign_id=campaign.id,
-                action_index=i+1,
-                success=False,
-                error_message=str(e)[:500]
-            )
-            db.add(action)
-            campaign.completed_count = i+1
-            db.commit()
-            actions_log.append({"index": i+1, "success": False, "error": str(e)[:200]})
-    
-    # Final status
-    if successes > 0:
-        campaign.status = CampaignStatus.COMPLETED
-    else:
-        campaign.status = CampaignStatus.FAILED
-        campaign.error_message = "All actions failed"
-    db.commit()
-    
-    # Send webhook if URL is provided
-    if campaign.webhook_url and (campaign.status == CampaignStatus.COMPLETED or campaign.status == CampaignStatus.FAILED):
-        background_tasks.add_task(
-            send_webhook,
-            campaign.webhook_url,
-            campaign.id,
-            campaign.name,
-            campaign.status.value,
-            successes,
-            campaign.target_count,
-            str(campaign.video_url),
-            campaign.webhook_secret
-        )
-    
-     Email notification – now ACTIVE 
-     send_campaign_completion_email(
-        to_email=user.email,
-        campaign_name=campaign.name,
-        status=campaign.status.value,
-        successful_actions=successes,
-        total_actions=campaign.target_count
-    )
-    
+
+    successes, total, status, actions = await _run_campaign_logic(campaign_id, db, background_tasks)
     return {
         "campaign_id": campaign.id,
         "successful_actions": successes,
-        "total_actions": campaign.target_count,
-        "status": campaign.status.value,
-        "actions": actions_log
+        "total_actions": total,
+        "status": status,
+        "actions": actions
     }
 
 
@@ -447,13 +310,10 @@ async def list_campaigns(
     skip: int = 0,
     limit: int = 50
 ):
-    """List all campaigns for current user"""
     user = get_current_user_from_token(credentials, db)
-    
     campaigns = db.query(Campaign).filter(
         Campaign.user_id == user.id
     ).order_by(desc(Campaign.created_at)).offset(skip).limit(limit).all()
-    
     result = []
     for c in campaigns:
         result.append({
@@ -481,17 +341,13 @@ async def get_campaign_status(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Get campaign status"""
     user = get_current_user_from_token(credentials, db)
-    
     campaign = db.query(Campaign).filter(
         Campaign.id == campaign_id,
         Campaign.user_id == user.id
     ).first()
-    
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
     return {
         "id": campaign.id,
         "name": campaign.name,
@@ -511,7 +367,6 @@ async def export_campaign_csv(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Export campaign actions as CSV file"""
     user = get_current_user_from_token(credentials, db)
     campaign = db.query(Campaign).filter(
         Campaign.id == campaign_id,
@@ -519,14 +374,11 @@ async def export_campaign_csv(
     ).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
     actions = db.query(CampaignAction).filter(
         CampaignAction.campaign_id == campaign_id
     ).order_by(CampaignAction.action_index).all()
-    
     import csv
     from io import StringIO
-    
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["Action Index", "Success", "YouTube Response", "Error Message", "Created At"])
@@ -538,7 +390,6 @@ async def export_campaign_csv(
             action.error_message or "",
             action.created_at.isoformat() if action.created_at else ""
         ])
-    
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -553,45 +404,15 @@ async def delete_campaign(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Delete a campaign (only if owned by current user and not running)"""
     user = get_current_user_from_token(credentials, db)
     campaign = db.query(Campaign).filter(
         Campaign.id == campaign_id,
         Campaign.user_id == user.id
     ).first()
-    
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
     if campaign.status == CampaignStatus.RUNNING:
         raise HTTPException(status_code=400, detail="Cannot delete a running campaign. Stop it first.")
-    
     db.delete(campaign)
     db.commit()
-    
     return {"message": "Campaign deleted successfully"}
-@router.post("/{campaign_id}/start")
-async def start_campaign(
-    campaign_id: int,
-    background_tasks: BackgroundTasks,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    user = get_current_user_from_token(credentials, db)
-    campaign = db.query(Campaign).filter(
-        Campaign.id == campaign_id,
-        Campaign.user_id == user.id
-    ).first()
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    if campaign.status != CampaignStatus.PENDING:
-        raise HTTPException(status_code=400, detail=f"Campaign already {campaign.status.value}")
-
-    successes, total, status, actions = await _run_campaign_logic(campaign_id, db, background_tasks)
-    return {
-        "campaign_id": campaign.id,
-        "successful_actions": successes,
-        "total_actions": total,
-        "status": status,
-        "actions": actions
-    }
