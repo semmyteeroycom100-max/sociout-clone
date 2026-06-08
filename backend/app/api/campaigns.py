@@ -242,21 +242,21 @@ async def create_campaign(
     # Convert comment_list to JSON string if present
     comment_list_json = json.dumps(campaign_data.comment_list) if campaign_data.comment_list else None
     
-    campaign = Campaign(
-        user_id=user.id,
-        name=campaign_data.name,
-        video_url=str(campaign_data.video_url),
-        video_id=video_id,
-        action_type=campaign_data.action_type,
-        target_count=campaign_data.target_count,
-        comment_text=campaign_data.comment_text,
-        comment_list=comment_list_json,
-        status=CampaignStatus.PENDING,
-        scheduled_at=campaign_data.scheduled_at,
-        webhook_url=str(campaign_data.webhook_url) if hasattr(campaign_data, 'webhook_url') and campaign_data.webhook_url else None,
-        webhook_secret=campaign_data.webhook_secret if hasattr(campaign_data, 'webhook_secret') else None
-        platform=campaign_data.platform   # new line
-    )
+  campaign = Campaign(
+    user_id=user.id,
+    name=campaign_data.name,
+    video_url=str(campaign_data.video_url),
+    video_id=video_id,
+    action_type=campaign_data.action_type,
+    target_count=campaign_data.target_count,
+    comment_text=campaign_data.comment_text,
+    comment_list=comment_list_json,
+    status=CampaignStatus.PENDING,
+    scheduled_at=campaign_data.scheduled_at,
+    webhook_url=str(campaign_data.webhook_url) if campaign_data.webhook_url else None,
+    webhook_secret=campaign_data.webhook_secret,   # ✅ no if/else needed (it's optional in schema)
+    platform=campaign_data.platform or "youtube"
+)
     
     db.add(campaign)
     db.commit()
