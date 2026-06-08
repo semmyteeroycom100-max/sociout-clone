@@ -14,7 +14,7 @@ from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignDetai
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.services.webhook import send_webhook
-# from app.services.email import send_campaign_completion_email
+from app.services.email import send_campaign_completion_email  
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
@@ -60,6 +60,161 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: BackgroundTasks = None):
+    """
+    Internal function to execute a campaign.
+    Returns (successes, total_actions, status, actions_log).
+    """
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        return 0, 0, "failed", []
+    if campaign.status != CampaignStatus.PENDING:
+        return 0, campaign.target_count, campaign.status.value, []
+
+    # Mark as running
+    campaign.status = CampaignStatus.RUNNING
+    campaign.started_at = datetime.utcnow()
+    db.commit()
+
+    # Get YouTube token
+    oauth_token = db.query(OAuthToken).filter(
+        OAuthToken.user_id == campaign.user_id,
+        OAuthToken.provider == "google"
+    ).first()
+    if not oauth_token:
+        campaign.status = CampaignStatus.FAILED
+        campaign.error_message = "YouTube not connected"
+        db.commit()
+        return 0, campaign.target_count, "failed", []
+
+    yt = YouTubeService(oauth_token.access_token)
+    successes = 0
+    actions_log = []
+
+    for i in range(campaign.target_count):
+        try:
+            if campaign.action_type == CampaignActionType.LIKE:
+                result = await yt.like_video(campaign.video_id)
+                success = "error" not in result
+                response = str(result)
+
+            elif campaign.action_type == CampaignActionType.SUBSCRIBE:
+                if not campaign.channel_id and campaign.video_id:
+                    video_info = await yt.get_video_info(campaign.video_id)
+                    campaign.channel_id = video_info.get("channel_id")
+                    db.commit()
+                if not campaign.channel_id:
+                    campaign.channel_id = extract_channel_id(str(campaign.video_url))
+                    db.commit()
+
+                if campaign.channel_id:
+                    result = await yt.subscribe_to_channel(campaign.channel_id)
+                    success = "error" not in result
+                    response = str(result)
+                else:
+                    success = False
+                    response = "Could not find channel ID"
+
+            elif campaign.action_type == CampaignActionType.COMMENT:
+                comment_text = campaign.comment_text
+                if campaign.comment_list:
+                    try:
+                        comments = json.loads(campaign.comment_list)
+                        if comments and len(comments) > 0:
+                            comment_text = random.choice(comments)
+                    except:
+                        pass
+
+                if not comment_text or not comment_text.strip():
+                    success = False
+                    response = "No comment text provided"
+                else:
+                    result = await yt.post_comment(campaign.video_id, comment_text)
+                    if "error" in result:
+                        success = False
+                        response = result["error"]
+                    else:
+                        success = True
+                        response = f"Comment posted: {comment_text[:50]}..."
+
+            else:
+                success = False
+                response = "Unknown action type"
+
+            # Record action
+            action = CampaignAction(
+                campaign_id=campaign.id,
+                action_index=i+1,
+                success=success,
+                youtube_response=response[:500] if response else None,
+                error_message=None if success else response[:500]
+            )
+            db.add(action)
+            if success:
+                successes += 1
+            campaign.completed_count = i+1
+            db.commit()
+            actions_log.append({"index": i+1, "success": success, "response": response[:200]})
+
+        except Exception as e:
+            action = CampaignAction(
+                campaign_id=campaign.id,
+                action_index=i+1,
+                success=False,
+                error_message=str(e)[:500]
+            )
+            db.add(action)
+            campaign.completed_count = i+1
+            db.commit()
+            actions_log.append({"index": i+1, "success": False, "error": str(e)[:200]})
+
+    # Final status
+    if successes > 0:
+        campaign.status = CampaignStatus.COMPLETED
+    else:
+        campaign.status = CampaignStatus.FAILED
+        campaign.error_message = "All actions failed"
+    db.commit()
+
+    # Send webhook if provided
+    if campaign.webhook_url and (campaign.status in (CampaignStatus.COMPLETED, CampaignStatus.FAILED)):
+        if background_tasks:
+            background_tasks.add_task(
+                send_webhook,
+                campaign.webhook_url,
+                campaign.id,
+                campaign.name,
+                campaign.status.value,
+                successes,
+                campaign.target_count,
+                str(campaign.video_url),
+                campaign.webhook_secret
+            )
+        else:
+            # No background_tasks (scheduler) – send synchronously
+            await send_webhook(
+                campaign.webhook_url,
+                campaign.id,
+                campaign.name,
+                campaign.status.value,
+                successes,
+                campaign.target_count,
+                str(campaign.video_url),
+                campaign.webhook_secret
+            )
+
+    # Email notification
+    user = db.query(User).filter(User.id == campaign.user_id).first()
+    if user and user.email:
+        send_campaign_completion_email(
+            to_email=user.email,
+            campaign_name=campaign.name,
+            status=campaign.status.value,
+            successful_actions=successes,
+            total_actions=campaign.target_count
+        )
+
+    return successes, campaign.target_count, campaign.status.value, actions_log
 
 @router.post("/create")
 async def create_campaign(
@@ -100,6 +255,7 @@ async def create_campaign(
         scheduled_at=campaign_data.scheduled_at,
         webhook_url=str(campaign_data.webhook_url) if hasattr(campaign_data, 'webhook_url') and campaign_data.webhook_url else None,
         webhook_secret=campaign_data.webhook_secret if hasattr(campaign_data, 'webhook_secret') else None
+        platform=campaign_data.platform   # new line
     )
     
     db.add(campaign)
@@ -266,6 +422,15 @@ async def start_campaign(
             campaign.webhook_secret
         )
     
+     Email notification – now ACTIVE 
+     send_campaign_completion_email(
+        to_email=user.email,
+        campaign_name=campaign.name,
+        status=campaign.status.value,
+        successful_actions=successes,
+        total_actions=campaign.target_count
+    )
+    
     return {
         "campaign_id": campaign.id,
         "successful_actions": successes,
@@ -405,3 +570,28 @@ async def delete_campaign(
     db.commit()
     
     return {"message": "Campaign deleted successfully"}
+@router.post("/{campaign_id}/start")
+async def start_campaign(
+    campaign_id: int,
+    background_tasks: BackgroundTasks,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user_from_token(credentials, db)
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.user_id == user.id
+    ).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.status != CampaignStatus.PENDING:
+        raise HTTPException(status_code=400, detail=f"Campaign already {campaign.status.value}")
+
+    successes, total, status, actions = await _run_campaign_logic(campaign_id, db, background_tasks)
+    return {
+        "campaign_id": campaign.id,
+        "successful_actions": successes,
+        "total_actions": total,
+        "status": status,
+        "actions": actions
+    }

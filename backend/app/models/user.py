@@ -79,6 +79,7 @@ class Campaign(Base):
     # Webhook fields (added for Phase 4)
     webhook_url = Column(String, nullable=True)
     webhook_secret = Column(String, nullable=True)
+    platform = Column(String, default='youtube')  # 'youtube' or 'tiktok'
     
     owner = relationship("User", back_populates="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign")

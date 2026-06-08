@@ -18,7 +18,8 @@ import {
   Square,
   CreditCard,
   Sun,
-  Moon
+  Moon,
+  Image
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { useToast } from '../context/ToastContext';
@@ -38,6 +39,8 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedCampaigns, setSelectedCampaigns] = useState([]);
+  const [tiktokConnected, setTiktokConnected] = useState(false);
+  const [platform, setPlatform] = useState('youtube');
   const [formData, setFormData] = useState({
     name: '',
     video_url: '',
@@ -57,6 +60,7 @@ function Dashboard() {
     loadUser();
     loadCampaigns();
     checkYoutubeStatus();
+    checkTikTokStatus();
   }, []);
 
   const loadUser = async () => {
@@ -96,6 +100,18 @@ function Dashboard() {
     }
   };
 
+  const checkTikTokStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/tiktok/status`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await response.json();
+      setTiktokConnected(data.connected);
+    } catch (err) {
+      console.error('Failed to check TikTok status');
+    }
+  };
+
   const resetYoutubeConnection = async () => {
     if (!confirm('Reset YouTube connection? You will need to reconnect.')) return;
     try {
@@ -116,11 +132,30 @@ function Dashboard() {
     }
   };
 
+  const resetTikTokConnection = async () => {
+    if (!confirm('Reset TikTok connection? You will need to reconnect.')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/tiktok/reset`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        addToast('TikTok connection reset', 'success');
+        setTiktokConnected(false);
+      } else {
+        addToast('Failed to reset TikTok connection', 'error');
+      }
+    } catch (err) {
+      addToast('Error resetting connection', 'error');
+    }
+  };
+
   const handleCreateCampaign = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const payload = { ...formData };
+      const payload = { ...formData, platform };
       if (scheduledDate) {
         payload.scheduled_at = new Date(scheduledDate).toISOString();
       }
@@ -144,6 +179,7 @@ function Dashboard() {
         setFormData({ name: '', video_url: '', action_type: 'LIKE', target_count: 10 });
         setScheduledDate('');
         setCommentListText('');
+        setPlatform('youtube');
         loadCampaigns();
         addToast('Campaign created successfully', 'success');
       } else {
@@ -199,7 +235,8 @@ function Dashboard() {
         action_type: campaign.action_type,
         target_count: campaign.target_count,
         comment_text: campaign.comment_text,
-        scheduled_at: null
+        scheduled_at: null,
+        platform: campaign.platform || 'youtube'
       };
       const response = await fetch(`${API_BASE}/campaigns/create`, {
         method: 'POST',
@@ -401,7 +438,6 @@ function Dashboard() {
               <LayoutDashboard className="w-5 h-5" />
               <span>Dashboard</span>
             </Link>
-            {/* CHANGED: Campaigns link now points to "/dashboard" (no separate campaigns page) */}
             <Link to="/dashboard" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
               <Video className="w-5 h-5" />
               <span>Campaigns</span>
@@ -409,6 +445,10 @@ function Dashboard() {
             <Link to="/analytics" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
               <TrendingUp className="w-5 h-5" />
               <span>Analytics</span>
+            </Link>
+            <Link to="/thumbnail-test" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
+              <Image className="w-5 h-5" />
+              <span>Thumbnail A/B</span>
             </Link>
             <Link to="/pricing" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
               <CreditCard className="w-5 h-5" />
@@ -460,6 +500,28 @@ function Dashboard() {
               </button>
             </>
           )}
+
+          {!tiktokConnected && (
+            <a href={`${API_BASE}/tiktok/login`} className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition text-sm">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.87-4.6 2.9 2.9 0 0 1 .91.25V9.41a6.3 6.3 0 0 0-1.28-.13 6.28 6.28 0 0 0-5.45 3.1 6.28 6.28 0 0 0 3.55 8.83 6.28 6.28 0 0 0 6.73-2.34 6.28 6.28 0 0 0 1.15-3.68V9.41c1.22.88 2.7 1.4 4.29 1.4V7.26c-.78 0-1.5-.18-2.16-.57z"/>
+              </svg>
+              Connect TikTok
+            </a>
+          )}
+          {tiktokConnected && (
+            <>
+              <div className="mb-3 px-3 py-2 bg-green-500/20 rounded-lg text-center">
+                <p className="text-green-400 text-xs">✓ TikTok Connected</p>
+              </div>
+              <button
+                onClick={resetTikTokConnection}
+                className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition text-sm"
+              >
+                🔄 Reset TikTok Connection
+              </button>
+            </>
+          )}
           
           <button onClick={handleLogout} className="flex items-center gap-2 text-gray-300 hover:text-white transition w-full px-3 py-2 rounded-lg hover:bg-white/5">
             <LogOut className="w-4 h-4" />
@@ -470,7 +532,6 @@ function Dashboard() {
 
       {/* Main Content */}
       <main className="md:ml-64 p-4 md:p-8">
-        {/* Mobile menu button */}
         <div className="md:hidden flex items-center mb-4">
           <button onClick={() => setMobileMenuOpen(true)} className="text-gray-600 dark:text-gray-300">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -666,9 +727,9 @@ function Dashboard() {
                         <button
                           onClick={() => handleStartCampaign(campaign.id)}
                           className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium"
-                          disabled={!youtubeConnected}
+                          disabled={!youtubeConnected && campaign.platform !== 'tiktok'}
                         >
-                          {youtubeConnected ? '▶ Start Campaign' : 'Connect YouTube First'}
+                          {youtubeConnected || campaign.platform === 'tiktok' ? '▶ Start Campaign' : 'Connect YouTube First'}
                         </button>
                       )}
                       
@@ -706,32 +767,64 @@ function Dashboard() {
                 <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Campaign Name</label>
                 <input type="text" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" placeholder="My Campaign" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
               </div>
+              
               <div className="mb-4">
-                <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">YouTube URL</label>
-                <input type="url" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" placeholder="https://youtube.com/watch?v=..." value={formData.video_url} onChange={(e) => setFormData({...formData, video_url: e.target.value})} required />
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Platform</label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  value={platform}
+                  onChange={(e) => {
+                    setPlatform(e.target.value);
+                    setFormData({ ...formData, action_type: e.target.value === 'youtube' ? 'LIKE' : 'LIKE' });
+                  }}
+                >
+                  <option value="youtube">YouTube</option>
+                  <option value="tiktok">TikTok</option>
+                </select>
               </div>
+
+              <div className="mb-4">
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Video / Profile URL</label>
+                <input type="url" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" placeholder={platform === 'youtube' ? "https://youtube.com/watch?v=..." : "https://tiktok.com/@user/video/..."} value={formData.video_url} onChange={(e) => setFormData({...formData, video_url: e.target.value})} required />
+              </div>
+
               <div className="mb-4">
                 <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Action Type</label>
                 <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" value={formData.action_type} onChange={(e) => setFormData({...formData, action_type: e.target.value})}>
-                  <option value="LIKE">👍 Like Video</option>
-                  <option value="SUBSCRIBE">🔔 Subscribe to Channel</option>
-                  <option value="COMMENT">💬 Post Comment</option>
+                  {platform === 'youtube' && (
+                    <>
+                      <option value="LIKE">👍 Like Video</option>
+                      <option value="SUBSCRIBE">🔔 Subscribe to Channel</option>
+                      <option value="COMMENT">💬 Post Comment</option>
+                    </>
+                  )}
+                  {platform === 'tiktok' && (
+                    <>
+                      <option value="LIKE">❤️ Like Video</option>
+                      <option value="FOLLOW">➕ Follow User</option>
+                      <option value="COMMENT">💬 Post Comment</option>
+                    </>
+                  )}
                 </select>
               </div>
+
               <div className="mb-4">
                 <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Target Count (max 100)</label>
                 <input type="number" min="1" max="100" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" value={formData.target_count} onChange={(e) => setFormData({...formData, target_count: parseInt(e.target.value) || 10})} required />
               </div>
+
               <div className="mb-4">
                 <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Schedule Start (optional)</label>
                 <input type="datetime-local" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
               </div>
+
               {formData.action_type === 'COMMENT' && (
                 <div className="mb-4">
                   <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Comments (one per line, randomly selected)</label>
                   <textarea className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white" rows="4" placeholder="Great video!%0AThanks for sharing!%0AVery helpful" value={commentListText} onChange={(e) => setCommentListText(e.target.value)} />
                 </div>
               )}
+
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition">Cancel</button>
                 <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition disabled:opacity-50">
@@ -754,15 +847,38 @@ function Dashboard() {
                 <input type="text" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" placeholder="Campaign Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
               </div>
               <div className="mb-4">
-                <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">YouTube URL</label>
-                <input type="url" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" placeholder="https://youtube.com/watch?v=..." value={formData.video_url} onChange={(e) => setFormData({...formData, video_url: e.target.value})} required />
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Platform</label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                  disabled
+                >
+                  <option value="youtube">YouTube</option>
+                  <option value="tiktok">TikTok</option>
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Video / Profile URL</label>
+                <input type="url" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" placeholder={platform === 'youtube' ? "https://youtube.com/watch?v=..." : "https://tiktok.com/@user/video/..."} value={formData.video_url} onChange={(e) => setFormData({...formData, video_url: e.target.value})} required />
               </div>
               <div className="mb-4">
                 <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Action Type</label>
                 <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" value={formData.action_type} onChange={(e) => setFormData({...formData, action_type: e.target.value})}>
-                  <option value="LIKE">👍 Like Video</option>
-                  <option value="SUBSCRIBE">🔔 Subscribe to Channel</option>
-                  <option value="COMMENT">💬 Post Comment</option>
+                  {platform === 'youtube' && (
+                    <>
+                      <option value="LIKE">👍 Like Video</option>
+                      <option value="SUBSCRIBE">🔔 Subscribe to Channel</option>
+                      <option value="COMMENT">💬 Post Comment</option>
+                    </>
+                  )}
+                  {platform === 'tiktok' && (
+                    <>
+                      <option value="LIKE">❤️ Like Video</option>
+                      <option value="FOLLOW">➕ Follow User</option>
+                      <option value="COMMENT">💬 Post Comment</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div className="mb-4">

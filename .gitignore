@@ -1,3 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.db
+*.sqlite3
+
+# Celery
+celerybeat.pid
+celerybeat-schedule
+*.log
+
+# Backend secrets & local files
+backend/.env
+backend/.env.local
+backend/sociout.db
+backend/__pycache__/
+backend/venv/
+backend/sociout_backup.sql
+
 # Admin / migration scripts (contain secrets or old DB URLs)
 set_admin*.py
 make_admin.py
@@ -11,5 +38,22 @@ inspect_*.py
 *.sql
 *.dump
 
-# Any other local test files
-backend/sociout_backup.sql
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.production
+frontend/.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
