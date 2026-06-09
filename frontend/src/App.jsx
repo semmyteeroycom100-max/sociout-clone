@@ -12,7 +12,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import ThumbnailTest from './pages/ThumbnailTest';
 import TermsOfService from './pages/TermsOfService';
 import Pricing from './pages/Pricing';
-
+import Advertise from './pages/Advertise';
 function App() {
   return (
     <Router>
@@ -31,7 +31,7 @@ function App() {
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/thumbnail-test" element={<ThumbnailTest />} />
         <Route path="/pricing" element={<Pricing />} />
-
+        <Route path="/advertise" element={<Advertise />} />
       </Routes>
     </Router>
   );

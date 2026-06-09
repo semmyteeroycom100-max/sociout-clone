@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   Image
+  Megaphone
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { useToast } from '../context/ToastContext';
@@ -464,6 +465,10 @@ function Dashboard() {
       {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
     </button>
+    <Link to="/advertise" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
+  <Megaphone className="w-5 h-5" />
+  <span>Advertise</span>
+    </Link>
   </nav>
 
   {/* Bottom section – fixed (no scroll) */}

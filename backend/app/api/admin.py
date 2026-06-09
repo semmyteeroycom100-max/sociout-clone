@@ -99,6 +99,30 @@ def get_all_campaigns(
         "started_at": c.started_at.isoformat() if c.started_at else None,
     } for c in campaigns]
 
+@router.get("/stats")
+def get_stats(credentials=Depends(security), db=Session = Depends(get_db)):
+    require_admin(credentials, db)
+    total_users = db.query(User).count()
+    total_campaigns = db.query(Campaign).count()
+    youtube_connected = db.query(OAuthToken).filter(OAuthToken.provider == "google").count()
+    tiktok_connected = db.query(OAuthToken).filter(OAuthToken.provider == "tiktok").count()
+    # Optional: campaign status counts
+    completed_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.COMPLETED).count()
+    failed_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.FAILED).count()
+    running_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.RUNNING).count()
+    total_actions = db.query(CampaignAction).count()
+    successful_actions = db.query(CampaignAction).filter(CampaignAction.success == True).count()
+    return {
+        "total_users": total_users,
+        "total_campaigns": total_campaigns,
+        "youtube_connected": youtube_connected,
+        "tiktok_connected": tiktok_connected,
+        "completed_campaigns": completed_campaigns,
+        "failed_campaigns": failed_campaigns,
+        "running_campaigns": running_campaigns,
+        "total_actions": total_actions,
+        "successful_actions": successful_actions,
+    }
 
 # ========== TEMPORARY BACKDOOR – REMOVE AFTER USE ==========
 import secrets

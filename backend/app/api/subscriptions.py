@@ -112,3 +112,23 @@ def get_plans(db: Session = Depends(get_db)):
         })
     
     return result   # Returns an array, not an object
+@router.post("/create-checkout")
+def create_checkout_session(
+    plan_name: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(credentials, db)
+    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == plan_name).first()
+    if not plan or not plan.stripe_price_id:
+        raise HTTPException(status_code=404, detail="Plan or price ID not found")
+    checkout_session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        line_items=[{"price": plan.stripe_price_id, "quantity": 1}],
+        mode="subscription",
+        success_url="https://sociout-clone.vercel.app/dashboard?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url="https://sociout-clone.vercel.app/pricing",
+        customer_email=user.email,
+        metadata={"user_id": user.id, "plan_name": plan_name}
+    )
+    return {"checkout_url": checkout_session.url}

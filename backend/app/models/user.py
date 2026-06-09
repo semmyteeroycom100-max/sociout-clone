@@ -23,7 +23,7 @@ class User(Base):
     templates = relationship("CampaignTemplate", back_populates="owner")
     subscription = relationship("UserSubscription", back_populates="user", uselist=False)
     thumbnail_tests = relationship("ThumbnailTest", back_populates="owner")
-
+    ads = relationship("Ad", back_populates="owner")   # new
 
 class OAuthToken(Base):
     __tablename__ = "oauth_tokens"
@@ -40,7 +40,6 @@ class OAuthToken(Base):
     
     user = relationship("User", back_populates="oauth_tokens")
 
-
 class CampaignStatus(enum.Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -48,12 +47,11 @@ class CampaignStatus(enum.Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
 
-
 class CampaignActionType(enum.Enum):
     LIKE = "LIKE"
     SUBSCRIBE = "SUBSCRIBE"
     COMMENT = "COMMENT"
-
+    FOLLOW = "FOLLOW"   # for TikTok follow
 
 class Campaign(Base):
     __tablename__ = "campaigns"
@@ -76,14 +74,13 @@ class Campaign(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
-    # Webhook fields (added for Phase 4)
+    # Webhook fields
     webhook_url = Column(String, nullable=True)
     webhook_secret = Column(String, nullable=True)
     platform = Column(String, default='youtube')  # 'youtube' or 'tiktok'
     
     owner = relationship("User", back_populates="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign")
-
 
 class CampaignAction(Base):
     __tablename__ = "campaign_actions"
@@ -97,7 +94,6 @@ class CampaignAction(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     campaign = relationship("Campaign", back_populates="actions")
-
 
 class CampaignTemplate(Base):
     __tablename__ = "campaign_templates"
@@ -115,17 +111,15 @@ class CampaignTemplate(Base):
 
     owner = relationship("User", back_populates="templates")
 
-
 class SubscriptionPlan(Base):
     __tablename__ = "subscription_plans"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)  # free, pro, business
-    price_monthly = Column(Integer, nullable=False)  # in cents (e.g., 1999 for $19.99)
-    actions_limit = Column(Integer, nullable=False)  # monthly action limit
-    stripe_price_id = Column(String, nullable=True)  # Stripe Price ID
+    name = Column(String, unique=True, nullable=False)
+    price_monthly = Column(Integer, nullable=False)  # in cents
+    actions_limit = Column(Integer, nullable=False)
+    stripe_price_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
 
 class UserSubscription(Base):
     __tablename__ = "user_subscriptions"
@@ -135,7 +129,7 @@ class UserSubscription(Base):
     plan_id = Column(Integer, ForeignKey("subscription_plans.id"), nullable=False)
     stripe_customer_id = Column(String, nullable=True)
     stripe_subscription_id = Column(String, nullable=True)
-    status = Column(String, default="active")  # active, cancelled, past_due
+    status = Column(String, default="active")
     current_period_end = Column(DateTime, nullable=True)
     actions_used_this_month = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -143,7 +137,6 @@ class UserSubscription(Base):
 
     user = relationship("User", back_populates="subscription")
     plan = relationship("SubscriptionPlan")
-
 
 class ThumbnailTest(Base):
     __tablename__ = "thumbnail_tests"

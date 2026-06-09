@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
 import secrets
@@ -12,8 +13,9 @@ from app.api import auth, users, oauth, youtube, campaigns, password_reset, admi
 from app.api import subscriptions
 from app.api import templates 
 from app.api import scheduler
+from app.api import ads
  
-
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 load_dotenv()
 
@@ -63,7 +65,7 @@ app.include_router(thumbnail_test.router)
 app.include_router(subscriptions.router)
 app.include_router(templates.router)
 app.include_router(scheduler.router)
-
+app.include_router(ads.router)
 @app.get("/")
 async def root():
     return {
