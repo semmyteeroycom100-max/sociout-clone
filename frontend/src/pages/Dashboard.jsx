@@ -674,7 +674,11 @@ function Dashboard() {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>
-                          {campaign.status}
+                          {campaign.status  === 'failed' && campaign.error_message && (
+                              <div className="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 p-2         rounded">
+                               ⚠️ {campaign.error_message}
+                                 </div>
+)}
                         </span>
                         <div className="flex gap-1">
                           <button

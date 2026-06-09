@@ -7,6 +7,7 @@ function AdminPanel() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [userConnections, setUserConnections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [batchEmails, setBatchEmails] = useState('');
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ function AdminPanel() {
     loadStats();
     loadUsers();
     loadCampaigns();
+    loadUserConnections();
   }, []);
 
   const loadStats = async () => {
@@ -51,7 +53,6 @@ function AdminPanel() {
     } catch (err) {
       console.error(err);
     }
-    setLoading(false);
   };
 
   const loadCampaigns = async () => {
@@ -64,6 +65,26 @@ function AdminPanel() {
       setCampaigns(data);
     } catch (err) {
       console.error('Failed to load campaigns', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // NEW: Fetch user connections (YouTube / TikTok status)
+  const loadUserConnections = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/admin/user-connections`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUserConnections(data);
+      } else {
+        console.warn('User connections endpoint not available yet');
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -101,6 +122,13 @@ function AdminPanel() {
 
   if (loading) return <div className="p-8 text-center">Loading admin panel...</div>;
 
+  // Calculate additional stats from campaigns
+  const completedCampaigns = campaigns.filter(c => c.status === 'completed').length;
+  const failedCampaigns = campaigns.filter(c => c.status === 'failed').length;
+  const runningCampaigns = campaigns.filter(c => c.status === 'running').length;
+  const totalActions = campaigns.reduce((sum, c) => sum + (c.completed_count || 0), 0);
+  // For a more accurate count, we would need CampaignAction table, but approximate is fine
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="flex justify-between items-center mb-8">
@@ -121,12 +149,28 @@ function AdminPanel() {
           <p className="text-2xl font-bold">{stats?.youtube_connected || 0}</p>
         </div>
         <div className="bg-white p-4 rounded shadow">
+          <h3 className="text-gray-500 text-sm">TikTok Connected</h3>
+          <p className="text-2xl font-bold">{stats?.tiktok_connected || 0}</p>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
           <h3 className="text-gray-500 text-sm">Total Campaigns</h3>
           <p className="text-2xl font-bold">{stats?.total_campaigns || 0}</p>
         </div>
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-gray-500 text-sm">Platform</h3>
-          <p className="text-2xl font-bold text-blue-600">Sociout</p>
+          <h3 className="text-gray-500 text-sm">Completed Campaigns</h3>
+          <p className="text-2xl font-bold text-green-600">{completedCampaigns}</p>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="text-gray-500 text-sm">Failed Campaigns</h3>
+          <p className="text-2xl font-bold text-red-600">{failedCampaigns}</p>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="text-gray-500 text-sm">Running Campaigns</h3>
+          <p className="text-2xl font-bold text-blue-600">{runningCampaigns}</p>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="text-gray-500 text-sm">Total Actions</h3>
+          <p className="text-2xl font-bold">{totalActions}</p>
         </div>
       </div>
 
@@ -149,6 +193,34 @@ function AdminPanel() {
         <p className="text-gray-500 text-sm mt-2">
           Format: email,username,password (one per line)
         </p>
+      </div>
+
+      {/* User Connections Table (NEW) */}
+      <div className="bg-white p-6 rounded shadow mb-8">
+        <h2 className="text-xl font-bold mb-4">User Connections</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-2 text-left">User</th>
+                <th className="p-2 text-left">YouTube</th>
+                <th className="p-2 text-left">TikTok</th>
+              </tr>
+            </thead>
+            <tbody>
+              {userConnections.map(conn => (
+                <tr key={conn.user_id} className="border-t">
+                  <td className="p-2">{conn.email} ({conn.username})</td>
+                  <td className="p-2">{conn.youtube ? '✅' : '❌'}</td>
+                  <td className="p-2">{conn.tiktok ? '✅' : '❌'}</td>
+                </tr>
+              ))}
+              {userConnections.length === 0 && (
+                <tr><td colSpan="3" className="p-2 text-center text-gray-500">No user connection data available. Add endpoint /api/admin/user-connections.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Users Table */}
@@ -178,7 +250,7 @@ function AdminPanel() {
         </div>
       </div>
 
-      {/* All Campaigns Table (NEW) */}
+      {/* All Campaigns Table */}
       <div className="bg-white p-6 rounded shadow">
         <h2 className="text-xl font-bold mb-4">All Campaigns ({campaigns.length})</h2>
         <div className="overflow-x-auto">

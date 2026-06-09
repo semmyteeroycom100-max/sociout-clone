@@ -89,6 +89,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
     yt = YouTubeService(oauth_token.access_token)
     successes = 0
     actions_log = []
+    first_error = None   # <-- added to capture the first failure reason
 
     for i in range(campaign.target_count):
         try:
@@ -96,6 +97,8 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                 result = await yt.like_video(campaign.video_id)
                 success = "error" not in result
                 response = str(result)
+                if not success and first_error is None:
+                    first_error = response
 
             elif campaign.action_type == CampaignActionType.SUBSCRIBE:
                 if not campaign.channel_id and campaign.video_id:
@@ -112,6 +115,8 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                 else:
                     success = False
                     response = "Could not find channel ID"
+                if not success and first_error is None:
+                    first_error = response
 
             elif campaign.action_type == CampaignActionType.COMMENT:
                 comment_text = campaign.comment_text
@@ -133,10 +138,14 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                     else:
                         success = True
                         response = f"Comment posted: {comment_text[:50]}..."
+                if not success and first_error is None:
+                    first_error = response
 
             else:
                 success = False
                 response = "Unknown action type"
+                if first_error is None:
+                    first_error = response
 
             # Record action
             action = CampaignAction(
@@ -154,23 +163,26 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
             actions_log.append({"index": i+1, "success": success, "response": response[:200]})
 
         except Exception as e:
+            error_msg = str(e)[:500]
             action = CampaignAction(
                 campaign_id=campaign.id,
                 action_index=i+1,
                 success=False,
-                error_message=str(e)[:500]
+                error_message=error_msg
             )
             db.add(action)
             campaign.completed_count = i+1
             db.commit()
-            actions_log.append({"index": i+1, "success": False, "error": str(e)[:200]})
+            actions_log.append({"index": i+1, "success": False, "error": error_msg})
+            if first_error is None:
+                first_error = error_msg
 
     # Final status
     if successes > 0:
         campaign.status = CampaignStatus.COMPLETED
     else:
         campaign.status = CampaignStatus.FAILED
-        campaign.error_message = "All actions failed"
+        campaign.error_message = first_error or "All actions failed"
     db.commit()
 
     # Send webhook if provided
