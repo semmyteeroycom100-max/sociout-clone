@@ -489,7 +489,6 @@ function Dashboard() {
         Connect YouTube
       </a>
     )}
-
     {youtubeConnected && (
       <>
         <div className="mb-3 px-3 py-2 bg-green-500/20 rounded-lg text-center">
@@ -532,7 +531,6 @@ function Dashboard() {
     </button>
   </div>
 </aside>
-
       {/* Main Content */}
       <main className="md:ml-64 p-4 md:p-8">
         <div className="md:hidden flex items-center mb-4">
