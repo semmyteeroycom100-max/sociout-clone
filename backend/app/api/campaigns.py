@@ -210,8 +210,6 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                 str(campaign.video_url),
                 campaign.webhook_secret
             )
-
-      Email notification
     user = db.query(User).filter(User.id == campaign.user_id).first()
     if user and user.email:
         send_campaign_completion_email(
@@ -226,6 +224,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
 
 
 @router.post("/create")
+@limiter.limit("25/hour")
 async def create_campaign(
     campaign_data: CampaignCreate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -289,6 +288,7 @@ async def create_campaign(
 
 
 @router.post("/{campaign_id}/start")
+@limiter.limit("25/hour")
 async def start_campaign(
     campaign_id: int,
     background_tasks: BackgroundTasks,
