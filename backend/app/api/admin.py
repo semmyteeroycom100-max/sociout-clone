@@ -100,7 +100,7 @@ def get_all_campaigns(
     } for c in campaigns]
 
 @router.get("/stats")
-def get_stats(credentials=Depends(security), db=Session = Depends(get_db)):
+def get_stats(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     require_admin(credentials, db)
     total_users = db.query(User).count()
     total_campaigns = db.query(Campaign).count()
