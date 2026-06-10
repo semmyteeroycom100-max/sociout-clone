@@ -211,7 +211,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                 campaign.webhook_secret
             )
 
-    # Email notification
+      Email notification
     user = db.query(User).filter(User.id == campaign.user_id).first()
     if user and user.email:
         send_campaign_completion_email(
