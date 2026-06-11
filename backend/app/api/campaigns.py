@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from app.main import limiter
+from slowapi.errors import RateLimitExceeded
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -226,6 +228,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
 @router.post("/create")
 @limiter.limit("25/hour")
 async def create_campaign(
+    request: Request,
     campaign_data: CampaignCreate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
@@ -290,6 +293,7 @@ async def create_campaign(
 @router.post("/{campaign_id}/start")
 @limiter.limit("25/hour")
 async def start_campaign(
+    request: Request,
     campaign_id: int,
     background_tasks: BackgroundTasks,
     credentials: HTTPAuthorizationCredentials = Depends(security),
