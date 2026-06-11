@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.main import limiter
+from app.utils.rate_limit import limiter
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -91,7 +91,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
     yt = YouTubeService(oauth_token.access_token)
     successes = 0
     actions_log = []
-    first_error = None   # <-- added to capture the first failure reason
+    first_error = None
 
     for i in range(campaign.target_count):
         try:
@@ -212,6 +212,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
                 str(campaign.video_url),
                 campaign.webhook_secret
             )
+
     user = db.query(User).filter(User.id == campaign.user_id).first()
     if user and user.email:
         send_campaign_completion_email(

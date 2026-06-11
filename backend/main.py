@@ -1,14 +1,14 @@
 from fastapi import FastAPI
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from app.utils.rate_limit import limiter
 from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 import os
 import secrets
-#import sentry_sdk
+# import sentry_sdk
 
 from app.database import engine, Base
 from app.api import auth, users, oauth, youtube, campaigns, password_reset, admin, analytics, thumbnail_test
@@ -21,10 +21,10 @@ from app.api import ads
 load_dotenv()
 
 # Initialize Sentry (use environment variable for DSN)
-#sentry_sdk.init(
-#    dsn=os.getenv("SENTRY_DSN", ""),
-#    traces_sample_rate=1.0,
-#)
+# sentry_sdk.init(
+#     dsn=os.getenv("SENTRY_DSN", ""),
+#     traces_sample_rate=1.0,
+# )
 
 # Create FastAPI app
 app = FastAPI(
@@ -38,8 +38,7 @@ os.makedirs("static/thumbnails", exist_ok=True)
 os.makedirs("static/ads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Rate limiting
-limiter = Limiter(key_func=get_remote_address, default_limits=["25/hour"])
+# Rate limiting – use the limiter imported from utils.rate_limit
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
