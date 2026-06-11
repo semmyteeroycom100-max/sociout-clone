@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 import os
 import secrets
-import sentry_sdk
+#import sentry_sdk
 
 from app.database import engine, Base
 from app.api import auth, users, oauth, youtube, campaigns, password_reset, admin, analytics, thumbnail_test
@@ -21,10 +21,10 @@ from app.api import ads
 load_dotenv()
 
 # Initialize Sentry (use environment variable for DSN)
-sentry_sdk.init(
-    dsn=os.getenv("SENTRY_DSN", ""),
-    traces_sample_rate=1.0,
-)
+#sentry_sdk.init(
+#    dsn=os.getenv("SENTRY_DSN", ""),
+#    traces_sample_rate=1.0,
+#)
 
 # Create FastAPI app
 app = FastAPI(

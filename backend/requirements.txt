@@ -20,3 +20,4 @@ python-multipart==0.0.20
 resend
 stripe 
 slowapi==0.1.9
+sentry-sdk==2.13.0
