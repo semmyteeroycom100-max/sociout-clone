@@ -6,7 +6,7 @@ import { loadStripe } from '@stripe/stripe-js';
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
 // Replace with your Stripe publishable key (test mode)
-const stripePromise = loadStripe('pk_test_...');
+const stripePromise = loadStripe(import.meta.env.pk_test_51TgIzYAucQ5h6phfEpSyKpAsXufAxBYO0R2JY0C4sPIRZPAIcG3THpWGG2A5EmyzE2rxQVyMbmvTZL2fsyF1lCOZ00GXhqRDOw);
 
 function Advertise() {
   const [slots, setSlots] = useState(null);
