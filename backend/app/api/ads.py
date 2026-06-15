@@ -19,7 +19,7 @@ from app.core.auth import decode_access_token
 router = APIRouter(prefix="/api/ads", tags=["Ads"])
 security = HTTPBearer()
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")   # may be None, but we'll not call stripe yet
 
 UPLOAD_DIR = Path("static/ads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -55,7 +55,69 @@ def get_available_slots(db: Session = Depends(get_db)):
         result[slot].append({"duration_days": p.duration_days, "price_cents": p.price_cents})
     return result
 
-# Keep /ping for testing
+@router.post("/upload")
+async def upload_ad_image(
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    ext = file.filename.split(".")[-1]
+    filename = f"ad_{datetime.utcnow().timestamp()}_{secrets.token_hex(8)}.{ext}"
+    filepath = UPLOAD_DIR / filename
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    url = f"/static/ads/{filename}"
+    return {"url": url}
+
+@router.post("/create")
+async def create_ad(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(credentials, db)
+    data = await request.json()
+    title = data.get("title")
+    image_url = data.get("image_url")
+    target_url = data.get("target_url")
+    slot_str = data.get("slot")
+    duration_days = data.get("duration_days")
+
+    if not all([title, image_url, target_url, slot_str, duration_days]):
+        raise HTTPException(status_code=400, detail="Missing required fields")
+
+    try:
+        slot = AdSlot(slot_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid slot type")
+
+    price_cents = get_price_for_slot(slot, duration_days, db)
+
+    ad = Ad(
+        user_id=user.id,
+        title=title,
+        image_url=image_url,
+        target_url=target_url,
+        slot=slot,
+        duration_days=duration_days,
+        price_paid=price_cents,
+        status=AdStatus.PENDING
+    )
+    db.add(ad)
+    db.commit()
+    db.refresh(ad)
+
+    # TODO: Replace with real Stripe PaymentIntent
+    # For now, return a fake client_secret (so frontend can proceed)
+    return {
+        "ad_id": ad.id,
+        "client_secret": "fake_secret_for_testing",
+        "amount": price_cents,
+        "currency": "usd"
+    }
+
 @router.get("/ping")
 async def ping():
     return {"message": "pong"}
