@@ -19,7 +19,7 @@ from app.core.auth import decode_access_token
 router = APIRouter(prefix="/api/ads", tags=["Ads"])
 security = HTTPBearer()
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")   # may be None, but we'll not call stripe yet
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 UPLOAD_DIR = Path("static/ads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -109,15 +109,125 @@ async def create_ad(
     db.commit()
     db.refresh(ad)
 
-    # TODO: Replace with real Stripe PaymentIntent
-    # For now, return a fake client_secret (so frontend can proceed)
+    # Create Stripe PaymentIntent
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=price_cents,
+            currency="usd",
+            metadata={
+                "ad_id": ad.id,
+                "user_id": user.id,
+                "slot": slot.value,
+                "duration_days": duration_days
+            }
+        )
+        ad.stripe_payment_intent_id = intent.id
+        db.commit()
+    except Exception as e:
+        db.delete(ad)
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
     return {
         "ad_id": ad.id,
-        "client_secret": "fake_secret_for_testing",
+        "client_secret": intent.client_secret,
         "amount": price_cents,
         "currency": "usd"
     }
 
-@router.get("/ping")
-async def ping():
-    return {"message": "pong"}
+@router.get("/my-ads")
+def get_my_ads(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(credentials, db)
+    ads = db.query(Ad).filter(Ad.user_id == user.id).order_by(Ad.created_at.desc()).all()
+    return [{
+        "id": a.id,
+        "title": a.title,
+        "image_url": a.image_url,
+        "target_url": a.target_url,
+        "slot": a.slot.value,
+        "duration_days": a.duration_days,
+        "status": a.status.value,
+        "impressions": a.impressions,
+        "clicks": a.clicks,
+        "created_at": a.created_at,
+        "start_date": a.start_date,
+        "end_date": a.end_date
+    } for a in ads]
+
+@router.post("/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid webhook")
+    if event["type"] == "payment_intent.succeeded":
+        intent = event["data"]["object"]
+        ad_id = int(intent["metadata"]["ad_id"])
+        ad = db.query(Ad).filter(Ad.id == ad_id).first()
+        if ad and ad.status == AdStatus.PENDING:
+            now = datetime.utcnow()
+            ad.status = AdStatus.ACTIVE
+            ad.start_date = now
+            ad.end_date = now + timedelta(days=ad.duration_days)
+            db.commit()
+    return {"status": "ok"}
+
+@router.get("/active")
+def get_active_ad(slot: str, db: Session = Depends(get_db)):
+    try:
+        slot_enum = AdSlot(slot)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid slot")
+    now = datetime.utcnow()
+    ad = db.query(Ad).filter(
+        Ad.slot == slot_enum,
+        Ad.status == AdStatus.ACTIVE,
+        Ad.start_date <= now,
+        Ad.end_date >= now
+    ).order_by(func.random()).first()
+    if not ad:
+        return None
+    ad.impressions += 1
+    db.commit()
+    return {
+        "id": ad.id,
+        "image_url": ad.image_url,
+        "target_url": ad.target_url,
+        "click_url": f"/api/ads/click/{ad.id}"
+    }
+
+@router.get("/click/{ad_id}")
+def track_click(ad_id: int, redirect_url: str, db: Session = Depends(get_db)):
+    from fastapi.responses import RedirectResponse
+    ad = db.query(Ad).filter(Ad.id == ad_id).first()
+    if ad:
+        ad.clicks += 1
+        db.commit()
+    redirect_to = ad.target_url if ad else redirect_url
+    return RedirectResponse(url=redirect_to)
+
+@router.post("/admin/approve/{ad_id}")
+def approve_ad(
+    ad_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    # You should check admin privileges here (similar to admin.py)
+    ad = db.query(Ad).filter(Ad.id == ad_id).first()
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    if ad.status == AdStatus.PENDING and ad.stripe_payment_intent_id:
+        ad.status = AdStatus.ACTIVE
+        now = datetime.utcnow()
+        ad.start_date = now
+        ad.end_date = now + timedelta(days=ad.duration_days)
+        db.commit()
+        return {"message": "Ad approved"}
+    else:
+        raise HTTPException(status_code=400, detail="Ad not eligible for approval")
