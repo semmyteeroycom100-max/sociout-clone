@@ -19,8 +19,10 @@ from app.core.auth import decode_access_token
 router = APIRouter(prefix="/api/ads", tags=["Ads"])
 security = HTTPBearer()
 
-# Stripe configuration
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+
+UPLOAD_DIR = Path("static/ads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_current_user(credentials: HTTPAuthorizationCredentials, db: Session):
     token = credentials.credentials
@@ -53,6 +55,7 @@ def get_available_slots(db: Session = Depends(get_db)):
         result[slot].append({"duration_days": p.duration_days, "price_cents": p.price_cents})
     return result
 
+# Keep /ping for testing
 @router.get("/ping")
 async def ping():
     return {"message": "pong"}
