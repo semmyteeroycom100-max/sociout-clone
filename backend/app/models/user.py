@@ -23,7 +23,7 @@ class User(Base):
     templates = relationship("CampaignTemplate", back_populates="owner")
     subscription = relationship("UserSubscription", back_populates="user", uselist=False)
     thumbnail_tests = relationship("ThumbnailTest", back_populates="owner")
-    ads = relationship("Ad", back_populates="owner")   # new
+
 
 class OAuthToken(Base):
     __tablename__ = "oauth_tokens"

@@ -1,6 +1,18 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index
 from sqlalchemy.sql import func
 from app.database import Base
+import enum
+
+class AdSlot(str, enum.Enum):
+    SIDEBAR = "sidebar"
+    TOP_BANNER = "top_banner"
+    BETWEEN_CARDS = "between_cards"
+
+class AdStatus(str, enum.Enum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
 
 class Ad(Base):
     __tablename__ = "ads"
@@ -9,11 +21,11 @@ class Ad(Base):
     title = Column(String(255), nullable=False)
     image_url = Column(Text, nullable=False)
     target_url = Column(Text, nullable=False)
-    slot = Column(String, nullable=False)
+    slot = Column(String, nullable=False)          # String, not Enum
     duration_days = Column(Integer, nullable=False)
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True)
-    status = Column(String, default="pending")
+    status = Column(String, default=AdStatus.PENDING.value)   # String
     stripe_payment_intent_id = Column(String, nullable=True)
     price_paid = Column(Integer, nullable=True)
     impressions = Column(Integer, default=0)
