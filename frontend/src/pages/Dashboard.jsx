@@ -25,6 +25,7 @@ import {
 import Logo from '../components/Logo';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { playClick, toggleSound } from '../utils/sound';   // <-- added
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
@@ -114,6 +115,7 @@ function Dashboard() {
   };
 
   const resetYoutubeConnection = async () => {
+    playClick();
     if (!confirm('Reset YouTube connection? You will need to reconnect.')) return;
     try {
       const token = localStorage.getItem('token');
@@ -134,6 +136,7 @@ function Dashboard() {
   };
 
   const resetTikTokConnection = async () => {
+    playClick();
     if (!confirm('Reset TikTok connection? You will need to reconnect.')) return;
     try {
       const token = localStorage.getItem('token');
@@ -153,6 +156,7 @@ function Dashboard() {
   };
 
   const handleCreateCampaign = async (e) => {
+    playClick();
     e.preventDefault();
     setLoading(true);
     try {
@@ -195,6 +199,7 @@ function Dashboard() {
   };
 
   const handleEditCampaign = async (e) => {
+    playClick();
     e.preventDefault();
     setLoading(true);
     try {
@@ -228,6 +233,7 @@ function Dashboard() {
   };
 
   const handleDuplicateCampaign = async (campaign) => {
+    playClick();
     try {
       const token = localStorage.getItem('token');
       const payload = {
@@ -259,6 +265,7 @@ function Dashboard() {
   };
 
   const handleDeleteCampaign = async (id) => {
+    playClick();
     if (!confirm('Are you sure you want to delete this campaign?')) return;
     try {
       const token = localStorage.getItem('token');
@@ -278,6 +285,7 @@ function Dashboard() {
   };
 
   const handleBulkStart = async () => {
+    playClick();
     if (selectedCampaigns.length === 0) {
       addToast('Please select campaigns to start', 'warning');
       return;
@@ -319,6 +327,7 @@ function Dashboard() {
   };
 
   const openEditModal = (campaign) => {
+    playClick();
     setEditingCampaign(campaign);
     setFormData({
       name: campaign.name,
@@ -332,6 +341,7 @@ function Dashboard() {
   };
 
   const handleStartCampaign = async (id) => {
+    playClick();
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/campaigns/${id}/start`, {
@@ -350,6 +360,7 @@ function Dashboard() {
   };
 
   const downloadCSV = async (campaignId) => {
+    playClick();
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${API_BASE}/campaigns/${campaignId}/export`, {
@@ -372,6 +383,7 @@ function Dashboard() {
   };
 
   const handleLogout = () => {
+    playClick();
     localStorage.removeItem('token');
     navigate('/login');
   };
@@ -465,6 +477,17 @@ function Dashboard() {
             {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
+          {/* Sound toggle button */}
+          <button
+            onClick={() => {
+              const enabled = toggleSound();
+              addToast(`Sound ${enabled ? 'on' : 'off'}`, 'info');
+            }}
+            className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition w-full"
+          >
+            <span className="text-xl">🔊</span>
+            <span>Sound</span>
+          </button>
           <Link to="/advertise" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
             <Megaphone className="w-5 h-5" />
             <span>Advertise</span>
@@ -534,6 +557,12 @@ function Dashboard() {
             <LogOut className="w-4 h-4" />
             <span className="text-sm">Logout</span>
           </button>
+              onClick={handleDeleteAccount}
+              className="flex items-center gap-2 text-red-400 hover:text-red-300 transition w-full px-3 py-2 rounded-lg hover:bg-white/5"
+>
+               <Trash2 className="w-4 h-4" />
+               <span className="text-sm">Delete Account</span>
+           </button>
         </div>
       </aside>
 
