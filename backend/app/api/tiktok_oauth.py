@@ -10,6 +10,16 @@ async def tiktok_status(
     ).first()
     return {"connected": token is not None}
 
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models.user import OAuthToken
+from app.core.auth import get_current_user
+
+router = APIRouter(prefix="/api/tiktok", tags=["TikTok"])
+security = HTTPBearer()
+
 @router.post("/reset")
 async def tiktok_reset(
     credentials: HTTPAuthorizationCredentials = Depends(security),
