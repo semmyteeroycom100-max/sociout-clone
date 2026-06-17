@@ -1,51 +1,32 @@
+from app.models.user import User   # <-- add this
 from sqlalchemy import text
 from app.database import engine
+from app.models.ad import Ad, AdSlotPrice
 
 def create_tables():
     with engine.connect() as conn:
-        # Create ads table
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS ads (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                title VARCHAR(255) NOT NULL,
-                image_url TEXT NOT NULL,
-                target_url TEXT NOT NULL,
-                slot VARCHAR(20) NOT NULL,
-                duration_days INTEGER NOT NULL,
-                start_date TIMESTAMP WITH TIME ZONE,
-                end_date TIMESTAMP WITH TIME ZONE,
-                status VARCHAR(20) DEFAULT 'pending',
-                stripe_payment_intent_id VARCHAR(255),
-                price_paid INTEGER,
-                impressions INTEGER DEFAULT 0,
-                clicks INTEGER DEFAULT 0,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        """))
-        print("✅ Table 'ads' created (or already exists)")
+        # Create tables if they don't exist
+        Ad.__table__.create(bind=engine, checkfirst=True)
+        AdSlotPrice.__table__.create(bind=engine, checkfirst=True)
+        print("Tables created (or already exist).")
 
-        # Create ad_slot_prices table
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS ad_slot_prices (
-                id SERIAL PRIMARY KEY,
-                slot VARCHAR(20) NOT NULL,
-                duration_days INTEGER NOT NULL,
-                price_cents INTEGER NOT NULL,
-                stripe_price_id VARCHAR(255),
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        """))
-        print("✅ Table 'ad_slot_prices' created (or already exists)")
-
-        # Create index for fast random ad selection
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_ads_active_slot 
-            ON ads (slot, status, start_date, end_date);
-        """))
-        conn.commit()
+        # Insert default slot prices
+        result = conn.execute(text("SELECT COUNT(*) FROM ad_slot_prices"))
+        count = result.scalar()
+        if count == 0:
+            conn.execute(text("""
+                INSERT INTO ad_slot_prices (slot, duration_days, price_cents) VALUES
+                ('sidebar', 7, 500),
+                ('sidebar', 30, 1500),
+                ('top_banner', 7, 1000),
+                ('top_banner', 30, 3000),
+                ('between_cards', 7, 800),
+                ('between_cards', 30, 2400)
+            """))
+            conn.commit()
+            print("Default slot prices inserted.")
+        else:
+            print("Slot prices already exist.")
 
 if __name__ == "__main__":
     create_tables()
