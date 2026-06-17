@@ -26,6 +26,7 @@ import Logo from '../components/Logo';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { playClick, toggleSound } from '../utils/sound';
+import TopBannerAd from '../components/TopBannerAd';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
@@ -605,6 +606,9 @@ function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400">Manage your YouTube automation campaigns</p>
         </div>
+
+        {/* Ad Banner */}
+        <TopBannerAd />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
