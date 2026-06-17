@@ -35,7 +35,7 @@ function Advertise() {
 
   const fetchSlots = async () => {
     try {
-      const res = await fetch(`${API_BASE}/ads/slots`);
+      const res = await fetch(`${API_BASE}/ads/slots`);  // <-- FIXED: /slots not /available-slots
       const data = await res.json();
       setSlots(data);
     } catch (err) {
@@ -69,7 +69,7 @@ function Advertise() {
     });
     if (!res.ok) throw new Error('Upload failed');
     const data = await res.json();
-    return data; // { url, media_type }
+    return data;
   };
 
   const handleCreateAd = async (e) => {
