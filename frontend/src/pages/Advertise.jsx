@@ -1,108 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useToast } from '../context/ToastContext';
 import { loadStripe } from '@stripe/stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { useToast } from '../context/ToastContext';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
-
-// Replace with your Stripe publishable key (test mode)
-const stripePromise = loadStripe(import.meta.env.pk_test_51TgIzYAucQ5h6phfEpSyKpAsXufAxBYO0R2JY0C4sPIRZPAIcG3THpWGG2A5EmyzE2rxQVyMbmvTZL2fsyF1lCOZ00GXhqRDOw);
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_YOUR_KEY_HERE');
 
 function Advertise() {
-  const [slots, setSlots] = useState(null);
+  const [slots, setSlots] = useState({});
+  const [myAds, setMyAds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState('');
   const [selectedDuration, setSelectedDuration] = useState('');
+  const [price, setPrice] = useState(0);
   const [title, setTitle] = useState('');
   const [targetUrl, setTargetUrl] = useState('');
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState('');
+  const [clientSecret, setClientSecret] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [price, setPrice] = useState(null);
   const { addToast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchAvailableSlots();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    fetchSlots();
+    fetchMyAds();
   }, []);
 
-  const fetchAvailableSlots = async () => {
+  const fetchSlots = async () => {
     try {
-      const res = await fetch(`${API_BASE}/ads/available-slots`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      const res = await fetch(`${API_BASE}/ads/slots`);
       const data = await res.json();
       setSlots(data);
     } catch (err) {
       addToast('Failed to load ad slots', 'error');
+    }
+  };
+
+  const fetchMyAds = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/ads/my-ads`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setMyAds(data);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-    } else {
-      addToast('Please select an image file', 'warning');
-    }
-  };
-
-  const uploadImage = async () => {
+  const uploadMedia = async (file) => {
     const formData = new FormData();
-    formData.append('file', imageFile);
-    const res = await fetch(`${API_BASE}/upload/ad-image`, {
+    formData.append('file', file);
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/ads/upload`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      headers: { Authorization: `Bearer ${token}` },
       body: formData
     });
     if (!res.ok) throw new Error('Upload failed');
     const data = await res.json();
-    return data.url;
+    return data; // { url, media_type }
   };
 
-  const handleSubmit = async (e) => {
+  const handleCreateAd = async (e) => {
     e.preventDefault();
-    if (!selectedSlot || !selectedDuration || !title || !targetUrl || !imageFile) {
-      addToast('Please fill all fields', 'warning');
+    if (!mediaFile) {
+      addToast('Please upload an image or video', 'warning');
       return;
     }
-    setUploading(true);
     try {
-      // 1. Upload image
-      const imageUrl = await uploadImage();
-      // 2. Create ad (gets PaymentIntent client secret)
+      setUploading(true);
+      const { url: media_url, media_type } = await uploadMedia(mediaFile);
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/ads/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           title,
-          image_url: imageUrl,
+          media_url,
+          media_type,
           target_url: targetUrl,
           slot: selectedSlot,
           duration_days: parseInt(selectedDuration)
         })
       });
       const data = await res.json();
-      if (data.client_secret) {
-        // 3. Confirm payment with Stripe
-        const stripe = await stripePromise;
-        const { error } = await stripe.confirmPayment({
-          clientSecret: data.client_secret,
-          confirmParams: {
-            return_url: `${window.location.origin}/advertise?success=true`
-          }
-        });
-        if (error) {
-          addToast(`Payment failed: ${error.message}`, 'error');
-        }
+      if (res.ok) {
+        setClientSecret(data.client_secret);
+        addToast('Ad created, proceed to payment', 'success');
       } else {
-        addToast('Failed to create ad', 'error');
+        addToast(data.detail || 'Failed to create ad', 'error');
       }
     } catch (err) {
       addToast('Error creating ad', 'error');
@@ -111,55 +111,207 @@ function Advertise() {
     }
   };
 
-  if (loading) return <div className="p-8">Loading ad slots...</div>;
+  const handleSlotChange = (slot) => {
+    setSelectedSlot(slot);
+    setSelectedDuration('');
+    setPrice(0);
+  };
 
-  const slotOptions = slots ? Object.keys(slots) : [];
-  const durations = selectedSlot && slots[selectedSlot] ? slots[selectedSlot] : [];
+  const handleDurationChange = (duration, priceCents) => {
+    setSelectedDuration(duration);
+    setPrice(priceCents);
+  };
+
+  const handleMediaChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const type = file.type;
+      if (type.startsWith('image/') || type.startsWith('video/')) {
+        setMediaFile(file);
+        setMediaPreview(URL.createObjectURL(file));
+      } else {
+        addToast('Please upload an image or video file', 'warning');
+      }
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-6">Create an Advertisement</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block font-medium mb-1">Title</label>
-          <input type="text" className="w-full border rounded p-2" value={title} onChange={(e) => setTitle(e.target.value)} required />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Advertise on Sociout</h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">Promote your product to our audience</p>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        {/* Left: Create ad form */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <h2 className="text-xl font-semibold mb-4">Create an Advertisement</h2>
+          {!clientSecret ? (
+            <form onSubmit={handleCreateAd}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Ad Title</label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Target URL</label>
+                <input
+                  type="url"
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                  value={targetUrl}
+                  onChange={(e) => setTargetUrl(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Ad Media (Image or Video)</label>
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleMediaChange}
+                  required
+                  className="w-full"
+                />
+                {mediaPreview && (
+                  <div className="mt-2">
+                    {mediaFile?.type.startsWith('video/') ? (
+                      <video src={mediaPreview} className="h-32 rounded" controls muted />
+                    ) : (
+                      <img src={mediaPreview} alt="Preview" className="h-32 rounded object-cover" />
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Ad Slot</label>
+                <select
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                  value={selectedSlot}
+                  onChange={(e) => handleSlotChange(e.target.value)}
+                  required
+                >
+                  <option value="">Select slot</option>
+                  {Object.keys(slots).map(slot => (
+                    <option key={slot} value={slot}>{slot.replace('_', ' ')}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedSlot && slots[selectedSlot] && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-1">Duration</label>
+                  <select
+                    className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                    value={selectedDuration}
+                    onChange={(e) => {
+                      const duration = parseInt(e.target.value);
+                      const priceItem = slots[selectedSlot].find(p => p.duration_days === duration);
+                      handleDurationChange(duration, priceItem?.price_cents || 0);
+                    }}
+                    required
+                  >
+                    <option value="">Select duration</option>
+                    {slots[selectedSlot].map(opt => (
+                      <option key={opt.duration_days} value={opt.duration_days}>
+                        {opt.duration_days} days – ${(opt.price_cents / 100).toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {price > 0 && (
+                <div className="mb-4 p-3 bg-gray-100 dark:bg-gray-700 rounded">
+                  Total: <strong>${(price / 100).toFixed(2)}</strong>
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={uploading}
+                className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 disabled:opacity-50"
+              >
+                {uploading ? 'Creating...' : 'Proceed to Payment'}
+              </button>
+            </form>
+          ) : (
+            <PaymentForm clientSecret={clientSecret} onSuccess={() => { setClientSecret(null); fetchMyAds(); }} />
+          )}
         </div>
-        <div>
-          <label className="block font-medium mb-1">Target URL</label>
-          <input type="url" className="w-full border rounded p-2" value={targetUrl} onChange={(e) => setTargetUrl(e.target.value)} required />
+
+        {/* Right: My Ads */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <h2 className="text-xl font-semibold mb-4">My Advertisements</h2>
+          {myAds.length === 0 ? (
+            <p className="text-gray-500">No ads yet.</p>
+          ) : (
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {myAds.map(ad => (
+                <div key={ad.id} className="border rounded p-3 flex items-center gap-3">
+                  {ad.media_type === 'video' ? (
+                    <video src={ad.media_url} className="w-16 h-16 object-cover rounded" muted />
+                  ) : (
+                    <img src={ad.media_url} alt={ad.title} className="w-16 h-16 object-cover rounded" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-semibold">{ad.title}</p>
+                    <p className="text-sm text-gray-500">Slot: {ad.slot} | {ad.duration_days} days</p>
+                    <p className="text-sm">Status: <span className={`font-medium ${ad.status === 'active' ? 'text-green-600' : 'text-yellow-600'}`}>{ad.status}</span></p>
+                    <p className="text-xs text-gray-400">Impressions: {ad.impressions} | Clicks: {ad.clicks}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block font-medium mb-1">Ad Slot</label>
-          <select className="w-full border rounded p-2" value={selectedSlot} onChange={(e) => { setSelectedSlot(e.target.value); setSelectedDuration(''); }} required>
-            <option value="">Select slot</option>
-            {slotOptions.map(slot => <option key={slot} value={slot}>{slot.replace('_', ' ').toUpperCase()}</option>)}
-          </select>
-        </div>
-        {selectedSlot && (
-          <div>
-            <label className="block font-medium mb-1">Duration</label>
-            <select className="w-full border rounded p-2" value={selectedDuration} onChange={(e) => {
-              setSelectedDuration(e.target.value);
-              const priceItem = durations.find(d => d.duration_days === parseInt(e.target.value));
-              setPrice(priceItem ? priceItem.price_dollars : null);
-            }} required>
-              <option value="">Select duration</option>
-              {durations.map(d => <option key={d.duration_days} value={d.duration_days}>{d.duration_days} days – ${d.price_dollars}</option>)}
-            </select>
-          </div>
-        )}
-        <div>
-          <label className="block font-medium mb-1">Ad Image</label>
-          <input type="file" accept="image/*" onChange={handleImageChange} required />
-          {imagePreview && <img src={imagePreview} alt="Preview" className="mt-2 h-32 object-contain" />}
-        </div>
-        {price && <div className="text-lg font-bold">Total: ${price}</div>}
-        <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
-          {uploading ? 'Processing...' : 'Pay and Create Ad'}
-        </button>
-      </form>
+      </div>
     </div>
   );
 }
 
-export default Advertise;
+function PaymentForm({ clientSecret, onSuccess }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+  const { addToast } = useToast();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setProcessing(true);
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: window.location.href },
+    });
+    if (error) {
+      addToast(error.message, 'error');
+    } else {
+      addToast('Payment successful! Ad will be activated soon.', 'success');
+      onSuccess();
+    }
+    setProcessing(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <PaymentElement />
+      <button
+        type="submit"
+        disabled={!stripe || processing}
+        className="mt-4 w-full bg-green-500 text-white py-2 rounded hover:bg-green-600 disabled:opacity-50"
+      >
+        {processing ? 'Processing...' : 'Pay Now'}
+      </button>
+    </form>
+  );
+}
+
+export default function AdvertiseWithStripe() {
+  return (
+    <Elements stripe={stripePromise}>
+      <Advertise />
+    </Elements>
+  );
+}
