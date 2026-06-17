@@ -25,7 +25,7 @@ import {
 import Logo from '../components/Logo';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
-import { playClick, toggleSound } from '../utils/sound';   // <-- added
+import { playClick, toggleSound } from '../utils/sound';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
@@ -382,6 +382,27 @@ function Dashboard() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    playClick();
+    if (!confirm('Are you sure? This action is permanent and cannot be undone.')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/users/me`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        addToast('Account deleted successfully', 'success');
+      } else {
+        addToast('Failed to delete account', 'error');
+      }
+    } catch (err) {
+      addToast('Error deleting account', 'error');
+    }
+  };
+
   const handleLogout = () => {
     playClick();
     localStorage.removeItem('token');
@@ -557,12 +578,13 @@ function Dashboard() {
             <LogOut className="w-4 h-4" />
             <span className="text-sm">Logout</span>
           </button>
-              onClick={handleDeleteAccount}
-              className="flex items-center gap-2 text-red-400 hover:text-red-300 transition w-full px-3 py-2 rounded-lg hover:bg-white/5"
->
-               <Trash2 className="w-4 h-4" />
-               <span className="text-sm">Delete Account</span>
-           </button>
+          <button
+            onClick={handleDeleteAccount}
+            className="flex items-center gap-2 text-red-400 hover:text-red-300 transition w-full px-3 py-2 rounded-lg hover:bg-white/5"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="text-sm">Delete Account</span>
+          </button>
         </div>
       </aside>
 
