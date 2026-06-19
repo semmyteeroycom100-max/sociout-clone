@@ -80,7 +80,8 @@ async def create_ad(
     user = get_current_user(credentials, db)
     data = await request.json()
     title = data.get("title")
-    image_url = data.get("image_url")
+    media_url = data.get("media_url")          # renamed
+    media_type = data.get("media_type", "image")
     target_url = data.get("target_url")
     slot_str = data.get("slot")
     duration_days = data.get("duration_days")
@@ -145,7 +146,8 @@ def get_my_ads(
     return [{
         "id": a.id,
         "title": a.title,
-        "image_url": a.image_url,
+        "media_url": a.media_url,   # renamed
+        "media_type": a.media_type,
         "target_url": a.target_url,
         "slot": a.slot.value,
         "duration_days": a.duration_days,
@@ -231,3 +233,52 @@ def approve_ad(
         return {"message": "Ad approved"}
     else:
         raise HTTPException(status_code=400, detail="Ad not eligible for approval")
+@router.post("/upload")
+async def upload_ad_media(
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    content_type = file.content_type
+    if not (content_type.startswith("image/") or content_type.startswith("video/")):
+        raise HTTPException(status_code=400, detail="File must be an image or video")
+
+    ext = file.filename.split(".")[-1]
+    media_type = "image" if content_type.startswith("image/") else "video"
+    prefix = "img" if media_type == "image" else "vid"
+    filename = f"ad_{prefix}_{datetime.utcnow().timestamp()}_{secrets.token_hex(8)}.{ext}"
+    filepath = UPLOAD_DIR / filename
+
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    url = f"/static/ads/{filename}"
+    return {"url": url, "media_type": media_type}
+@router.post("/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    if not webhook_secret:
+        print("⚠️ STRIPE_WEBHOOK_SECRET not set – webhook disabled")
+        return {"status": "ok"}
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid webhook")
+
+    if event["type"] == "payment_intent.succeeded":
+        intent = event["data"]["object"]
+        ad_id = int(intent["metadata"]["ad_id"])
+        ad = db.query(Ad).filter(Ad.id == ad_id).first()
+        if ad and ad.status == "pending":
+            now = datetime.utcnow()
+            ad.status = "active"
+            ad.start_date = now
+            ad.end_date = now + timedelta(days=ad.duration_days)
+            db.commit()
+            print(f"✅ Ad {ad_id} activated via webhook")
+    return {"status": "ok"}
