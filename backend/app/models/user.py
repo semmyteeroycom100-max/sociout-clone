@@ -37,7 +37,11 @@ class OAuthToken(Base):
     scope = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+    bio = Column(Text, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    wallet_balance = Column(Integer, default=0)  # in cents
     user = relationship("User", back_populates="oauth_tokens")
 
 class CampaignStatus(enum.Enum):
