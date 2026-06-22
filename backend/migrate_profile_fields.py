@@ -24,18 +24,22 @@ cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS location VARCHAR")
 cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance INTEGER DEFAULT 0")
 print("✅ Added profile columns to users table")
 
-# 3. CREATE activity_logs table if not exists
+# 3. DROP old activity_logs table if it exists (to avoid column name conflict)
+cur.execute("DROP TABLE IF EXISTS activity_logs")
+print("✅ Dropped old activity_logs table (if existed)")
+
+# 4. CREATE activity_logs table with extra_data (renamed from metadata)
 cur.execute("""
 CREATE TABLE IF NOT EXISTS activity_logs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     action_type VARCHAR NOT NULL,
     description VARCHAR,
-    metadata JSONB,
+    extra_data JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 )
 """)
-print("✅ Created activity_logs table (if not exists)")
+print("✅ Created activity_logs table")
 
 conn.commit()
 cur.close()
