@@ -7,6 +7,7 @@ import Analytics from './pages/Analytics';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import TestCampaign from './pages/TestCampaign';
+import Profile from './pages/Profile';
 import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ThumbnailTest from './pages/ThumbnailTest';
@@ -27,6 +28,7 @@ function App() {
         <Route path="/thumbnail-test" element={<ThumbnailTest />} />
 	<Route path="/analytics" element={<Analytics />} />
         <Route path="/admin" element={<AdminPanel />} />
+	<Route path="/profile" element={<Profile />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/thumbnail-test" element={<ThumbnailTest />} />
