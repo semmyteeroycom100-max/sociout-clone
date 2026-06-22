@@ -19,13 +19,14 @@ class Ad(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)
-    image_url = Column(Text, nullable=False)
+    media_url = Column(Text, nullable=False)           # renamed from image_url
+    media_type = Column(String, default="image")       # 'image' or 'video'
     target_url = Column(Text, nullable=False)
-    slot = Column(String, nullable=False)          # String, not Enum
+    slot = Column(String, nullable=False)
     duration_days = Column(Integer, nullable=False)
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True)
-    status = Column(String, default=AdStatus.PENDING.value)   # String
+    status = Column(String, default=AdStatus.PENDING.value)
     stripe_payment_intent_id = Column(String, nullable=True)
     price_paid = Column(Integer, nullable=True)
     impressions = Column(Integer, default=0)

@@ -21,26 +21,39 @@ function Analytics() {
     }
     fetchAnalytics();
   }, []);
-
-  const fetchAnalytics = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/analytics/channel`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (!response.ok) {
-        if (response.status === 401) throw new Error('YouTube not connected');
-        if (response.status === 404) throw new Error('No YouTube channel found');
-        const errText = await response.text();
-        throw new Error(errText || 'Failed to fetch analytics');
-      }
-      const result = await response.json();
-      setData(result);
-    } catch (err) {
-      setError(err.message);
-    } finally {
+const fetchAnalytics = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('No authentication token found. Please log in again.');
       setLoading(false);
+      return;
     }
-  };
+
+    const response = await fetch(`${API_BASE}/analytics/channel`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token expired or invalid
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
+      if (response.status === 403) throw new Error('YouTube Analytics API not enabled or missing scope. Please reconnect YouTube.');
+      if (response.status === 404) throw new Error('No YouTube channel found');
+      const errText = await response.text();
+      throw new Error(errText || 'Failed to fetch analytics');
+    }
+    const result = await response.json();
+    setData(result);
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Helper to safely extract rows and column headers
   const rows = data?.rows || [];

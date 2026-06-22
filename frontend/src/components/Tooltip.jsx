@@ -1,23 +1,23 @@
-import * as TooltipRadix from '@radix-ui/react-tooltip';
+import React, { useState } from 'react';
 
-export function Tooltip({ children, content, side = 'top' }) {
+function Tooltip({ children, content }) {
+  const [visible, setVisible] = useState(false);
+
   return (
-    <TooltipRadix.Provider delayDuration={200}>
-      <TooltipRadix.Root>
-        <TooltipRadix.Trigger asChild>
-          {children}
-        </TooltipRadix.Trigger>
-        <TooltipRadix.Portal>
-          <TooltipRadix.Content
-            className="bg-gray-900 text-white text-xs rounded px-2 py-1 max-w-xs z-50"
-            sideOffset={5}
-            side={side}
-          >
-            {content}
-            <TooltipRadix.Arrow className="fill-gray-900" />
-          </TooltipRadix.Content>
-        </TooltipRadix.Portal>
-      </TooltipRadix.Root>
-    </TooltipRadix.Provider>
+    <div
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+    >
+      {children}
+      {visible && (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg max-w-xs z-50">
+          {content}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900" />
+        </div>
+      )}
+    </div>
   );
 }
+
+export default Tooltip;

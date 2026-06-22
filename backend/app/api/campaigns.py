@@ -17,6 +17,7 @@ from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.services.webhook import send_webhook
 from app.services.email import send_campaign_completion_email
+from app.services.activity_logger import log_activity   # <-- added
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
@@ -77,6 +78,14 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
     campaign.started_at = datetime.utcnow()
     db.commit()
 
+    # Log activity: campaign started
+    log_activity(
+        user_id=campaign.user_id,
+        action_type="campaign_started",
+        description=f"Started campaign '{campaign.name}' on {campaign.platform}",
+        metadata={"campaign_id": campaign.id, "platform": campaign.platform}
+    )
+
     # Get YouTube token
     oauth_token = db.query(OAuthToken).filter(
         OAuthToken.user_id == campaign.user_id,
@@ -86,6 +95,12 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
         campaign.status = CampaignStatus.FAILED
         campaign.error_message = "YouTube not connected"
         db.commit()
+        log_activity(
+            user_id=campaign.user_id,
+            action_type="campaign_failed",
+            description=f"Campaign '{campaign.name}' failed: YouTube not connected",
+            metadata={"campaign_id": campaign.id, "error": "YouTube not connected"}
+        )
         return 0, campaign.target_count, "failed", []
 
     yt = YouTubeService(oauth_token.access_token)
@@ -182,9 +197,21 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
     # Final status
     if successes > 0:
         campaign.status = CampaignStatus.COMPLETED
+        log_activity(
+            user_id=campaign.user_id,
+            action_type="campaign_completed",
+            description=f"Campaign '{campaign.name}' completed with {successes}/{campaign.target_count} actions",
+            metadata={"campaign_id": campaign.id, "successes": successes, "total": campaign.target_count}
+        )
     else:
         campaign.status = CampaignStatus.FAILED
         campaign.error_message = first_error or "All actions failed"
+        log_activity(
+            user_id=campaign.user_id,
+            action_type="campaign_failed",
+            description=f"Campaign '{campaign.name}' failed: {campaign.error_message}",
+            metadata={"campaign_id": campaign.id, "error": campaign.error_message}
+        )
     db.commit()
 
     # Send webhook if provided

@@ -20,13 +20,17 @@ import {
   Sun,
   Moon,
   Image,
-  Megaphone
+  Megaphone,
+  User
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { playClick, toggleSound } from '../utils/sound';
 import TopBannerAd from '../components/TopBannerAd';
+import UserMenu from '../components/UserMenu';
+import OnboardingChecklist from '../components/OnboardingChecklist';
+import Tooltip from '../components/Tooltip';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
@@ -383,27 +387,6 @@ function Dashboard() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    playClick();
-    if (!confirm('Are you sure? This action is permanent and cannot be undone.')) return;
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/users/me`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.ok) {
-        localStorage.removeItem('token');
-        navigate('/login');
-        addToast('Account deleted successfully', 'success');
-      } else {
-        addToast('Failed to delete account', 'error');
-      }
-    } catch (err) {
-      addToast('Error deleting account', 'error');
-    }
-  };
-
   const handleLogout = () => {
     playClick();
     localStorage.removeItem('token');
@@ -472,9 +455,9 @@ function Dashboard() {
 
         {/* Scrollable navigation area */}
         <nav className="flex-1 overflow-y-auto px-6 space-y-2">
-          <Link to="/dashboard" className="flex items-center gap-3 px-4 py-3 bg-white/10 rounded-lg">
-            <LayoutDashboard className="w-5 h-5" />
-            <span>Dashboard</span>
+          <Link to="/profile" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
+            <User className="w-5 h-5" />
+            <span>My Profile</span>
           </Link>
           <Link to="/dashboard" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/5 rounded-lg transition">
             <Video className="w-5 h-5" />
@@ -516,76 +499,41 @@ function Dashboard() {
           </Link>
         </nav>
 
-        {/* Bottom section – fixed (no scroll) */}
+        {/* Bottom section – fixed (no scroll) – Platforms only */}
         <div className="p-6 border-t border-gray-700 flex-shrink-0">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
-              <span className="text-sm font-bold">{user?.username?.charAt(0).toUpperCase()}</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium">{user?.username}</p>
-              <p className="text-xs text-gray-400">{user?.email}</p>
-            </div>
+          <div className="space-y-2">
+            {!youtubeConnected && (
+              <a href={`${API_BASE}/auth/google`} className="flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-white/5 rounded-lg transition text-sm">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                Connect YouTube
+              </a>
+            )}
+            {youtubeConnected && (
+              <div className="flex items-center gap-2 px-4 py-2 text-green-400 text-sm">
+                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                YouTube Connected
+              </div>
+            )}
+            {!tiktokConnected && (
+              <a href={`${API_BASE}/tiktok/login`} className="flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-white/5 rounded-lg transition text-sm">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.87-4.6 2.9 2.9 0 0 1 .91.25V9.41a6.3 6.3 0 0 0-1.28-.13 6.28 6.28 0 0 0-5.45 3.1 6.28 6.28 0 0 0 3.55 8.83 6.28 6.28 0 0 0 6.73-2.34 6.28 6.28 0 0 0 1.15-3.68V9.41c1.22.88 2.7 1.4 4.29 1.4V7.26c-.78 0-1.5-.18-2.16-.57z"/>
+                </svg>
+                Connect TikTok
+              </a>
+            )}
+            {tiktokConnected && (
+              <div className="flex items-center gap-2 px-4 py-2 text-green-400 text-sm">
+                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                TikTok Connected
+              </div>
+            )}
           </div>
-
-          {!youtubeConnected && (
-            <a href={`${API_BASE}/auth/google`} className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              Connect YouTube
-            </a>
-          )}
-          {youtubeConnected && (
-            <>
-              <div className="mb-3 px-3 py-2 bg-green-500/20 rounded-lg text-center">
-                <p className="text-green-400 text-xs">✓ YouTube Connected</p>
-              </div>
-              <button
-                onClick={resetYoutubeConnection}
-                className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition text-sm"
-              >
-                🔄 Reset YouTube Connection
-              </button>
-            </>
-          )}
-
-          {!tiktokConnected && (
-            <a href={`${API_BASE}/tiktok/login`} className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition text-sm">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.87-4.6 2.9 2.9 0 0 1 .91.25V9.41a6.3 6.3 0 0 0-1.28-.13 6.28 6.28 0 0 0-5.45 3.1 6.28 6.28 0 0 0 3.55 8.83 6.28 6.28 0 0 0 6.73-2.34 6.28 6.28 0 0 0 1.15-3.68V9.41c1.22.88 2.7 1.4 4.29 1.4V7.26c-.78 0-1.5-.18-2.16-.57z"/>
-              </svg>
-              Connect TikTok
-            </a>
-          )}
-          {tiktokConnected && (
-            <>
-              <div className="mb-3 px-3 py-2 bg-green-500/20 rounded-lg text-center">
-                <p className="text-green-400 text-xs">✓ TikTok Connected</p>
-              </div>
-              <button
-                onClick={resetTikTokConnection}
-                className="flex items-center justify-center gap-2 w-full mb-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition text-sm"
-              >
-                🔄 Reset TikTok Connection
-              </button>
-            </>
-          )}
-
-          <button onClick={handleLogout} className="flex items-center gap-2 text-gray-300 hover:text-white transition w-full px-3 py-2 rounded-lg hover:bg-white/5">
-            <LogOut className="w-4 h-4" />
-            <span className="text-sm">Logout</span>
-          </button>
-          <button
-            onClick={handleDeleteAccount}
-            className="flex items-center gap-2 text-red-400 hover:text-red-300 transition w-full px-3 py-2 rounded-lg hover:bg-white/5"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span className="text-sm">Delete Account</span>
-          </button>
         </div>
       </aside>
 
@@ -602,10 +550,21 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Dashboard</h1>
-          <p className="text-gray-500 dark:text-gray-400">Manage your YouTube automation campaigns</p>
+        {/* Header with UserMenu */}
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Dashboard</h1>
+            <p className="text-gray-500 dark:text-gray-400">Manage your YouTube automation campaigns</p>
+          </div>
+          <UserMenu user={user} />
         </div>
+
+        {/* Onboarding Checklist */}
+        <OnboardingChecklist
+          youtubeConnected={youtubeConnected}
+          tiktokConnected={tiktokConnected}
+          campaigns={campaigns}
+        />
 
         {/* Ad Banner */}
         <TopBannerAd />
@@ -668,13 +627,15 @@ function Dashboard() {
                     Start {selectedCampaigns.length}
                   </button>
                 )}
-                <button 
-                  onClick={() => setShowModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition"
-                >
-                  <PlusCircle className="w-5 h-5" />
-                  New Campaign
-                </button>
+                <Tooltip content="Create a new automation campaign for YouTube or TikTok">
+                  <button 
+                    onClick={() => setShowModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition"
+                  >
+                    <PlusCircle className="w-5 h-5" />
+                    New Campaign
+                  </button>
+                </Tooltip>
               </div>
             </div>
             
@@ -791,13 +752,15 @@ function Dashboard() {
                     
                     <div className="flex flex-wrap gap-2 mt-3">
                       {campaign.status === 'pending' && (
-                        <button
-                          onClick={() => handleStartCampaign(campaign.id)}
-                          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium"
-                          disabled={!youtubeConnected && campaign.platform !== 'tiktok'}
-                        >
-                          {youtubeConnected || campaign.platform === 'tiktok' ? '▶ Start Campaign' : 'Connect YouTube First'}
-                        </button>
+                        <Tooltip content="Start this campaign to begin automation">
+                          <button
+                            onClick={() => handleStartCampaign(campaign.id)}
+                            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium"
+                            disabled={!youtubeConnected && campaign.platform !== 'tiktok'}
+                          >
+                            {youtubeConnected || campaign.platform === 'tiktok' ? '▶ Start Campaign' : 'Connect YouTube First'}
+                          </button>
+                        </Tooltip>
                       )}
                       
                       {campaign.status === 'running' && (
@@ -808,12 +771,14 @@ function Dashboard() {
                       )}
                       
                       {campaign.status === 'completed' && (
-                        <button
-                          onClick={() => downloadCSV(campaign.id)}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium"
-                        >
-                          📥 Download CSV
-                        </button>
+                        <Tooltip content="Download campaign results as CSV">
+                          <button
+                            onClick={() => downloadCSV(campaign.id)}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium"
+                          >
+                            📥 Download CSV
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
