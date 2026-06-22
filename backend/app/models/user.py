@@ -18,6 +18,13 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
+    # Profile fields (moved here from OAuthToken)
+    bio = Column(Text, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    wallet_balance = Column(Integer, default=0)  # in cents
+
     campaigns = relationship("Campaign", back_populates="owner")
     oauth_tokens = relationship("OAuthToken", back_populates="user")
     templates = relationship("CampaignTemplate", back_populates="owner")
@@ -37,12 +44,11 @@ class OAuthToken(Base):
     scope = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    bio = Column(Text, nullable=True)
-    avatar_url = Column(String, nullable=True)
-    website = Column(String, nullable=True)
-    location = Column(String, nullable=True)
-    wallet_balance = Column(Integer, default=0)  # in cents
+    # These columns have been removed – they belong to User
+    # bio, avatar_url, website, location, wallet_balance – REMOVED
+
     user = relationship("User", back_populates="oauth_tokens")
+
 
 class CampaignStatus(enum.Enum):
     PENDING = "pending"
@@ -51,11 +57,13 @@ class CampaignStatus(enum.Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
 
+
 class CampaignActionType(enum.Enum):
     LIKE = "LIKE"
     SUBSCRIBE = "SUBSCRIBE"
     COMMENT = "COMMENT"
     FOLLOW = "FOLLOW"   # for TikTok follow
+
 
 class Campaign(Base):
     __tablename__ = "campaigns"
@@ -86,6 +94,7 @@ class Campaign(Base):
     owner = relationship("User", back_populates="campaigns")
     actions = relationship("CampaignAction", back_populates="campaign")
 
+
 class CampaignAction(Base):
     __tablename__ = "campaign_actions"
 
@@ -98,6 +107,7 @@ class CampaignAction(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     campaign = relationship("Campaign", back_populates="actions")
+
 
 class CampaignTemplate(Base):
     __tablename__ = "campaign_templates"
@@ -115,6 +125,7 @@ class CampaignTemplate(Base):
 
     owner = relationship("User", back_populates="templates")
 
+
 class SubscriptionPlan(Base):
     __tablename__ = "subscription_plans"
 
@@ -124,6 +135,7 @@ class SubscriptionPlan(Base):
     actions_limit = Column(Integer, nullable=False)
     stripe_price_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class UserSubscription(Base):
     __tablename__ = "user_subscriptions"
@@ -141,6 +153,7 @@ class UserSubscription(Base):
 
     user = relationship("User", back_populates="subscription")
     plan = relationship("SubscriptionPlan")
+
 
 class ThumbnailTest(Base):
     __tablename__ = "thumbnail_tests"
