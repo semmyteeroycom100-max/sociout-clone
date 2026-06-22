@@ -8,5 +8,5 @@ class ActivityLog(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     action_type = Column(String, nullable=False)  # e.g., "campaign_started", "video_watched", "subscriber_gained"
     description = Column(String, nullable=True)   # human-readable description
-    metadata = Column(JSON, nullable=True)       # extra data (campaign_id, video_id, etc.)
+    extra_data = Column(JSON, nullable=True)       # extra data (campaign_id, video_id, etc.)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

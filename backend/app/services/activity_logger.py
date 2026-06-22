@@ -1,14 +1,14 @@
 from app.models.activity import ActivityLog
 from app.database import SessionLocal
 
-def log_activity(user_id: int, action_type: str, description: str = None, metadata: dict = None):
+def log_activity(user_id: int, action_type: str, description: str = None, extra_data: dict = None):
     db = SessionLocal()
     try:
         log = ActivityLog(
             user_id=user_id,
             action_type=action_type,
             description=description,
-            metadata=metadata
+            extra_data=extra_data
         )
         db.add(log)
         db.commit()
