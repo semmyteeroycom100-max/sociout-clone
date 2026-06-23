@@ -24,11 +24,16 @@ cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS location VARCHAR")
 cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance INTEGER DEFAULT 0")
 print("✅ Added profile columns to users table")
 
-# 3. DROP old activity_logs table if it exists (to avoid column name conflict)
+# 3. ADD role and daily_action_limit to users (if not exist)
+cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR DEFAULT 'user'")
+cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_action_limit INTEGER DEFAULT 5")
+print("✅ Added role and daily_action_limit to users")
+
+# 4. DROP old activity_logs table if it exists (to avoid column name conflict)
 cur.execute("DROP TABLE IF EXISTS activity_logs")
 print("✅ Dropped old activity_logs table (if existed)")
 
-# 4. CREATE activity_logs table with extra_data (renamed from metadata)
+# 5. CREATE activity_logs table with extra_data
 cur.execute("""
 CREATE TABLE IF NOT EXISTS activity_logs (
     id SERIAL PRIMARY KEY,

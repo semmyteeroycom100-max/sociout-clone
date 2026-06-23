@@ -142,3 +142,23 @@ async def get_video_info(
                 }
         
         return {"error": "Video not found"}
+@router.get("/status")
+async def youtube_status(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    oauth_token = db.query(OAuthToken).filter(
+        OAuthToken.user_id == user.id,
+        OAuthToken.provider == "google"
+    ).first()
+    
+    return {"connected": oauth_token is not None}

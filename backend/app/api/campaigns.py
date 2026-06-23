@@ -17,7 +17,10 @@ from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.services.webhook import send_webhook
 from app.services.email import send_campaign_completion_email
-from app.services.activity_logger import log_activity   # <-- added
+from app.services.activity_logger import log_activity
+from app.services.account_selector import AccountSelector
+from app.services.action_executor import ActionExecutor
+from app.models.pool_account import PoolAccount
 
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
@@ -63,10 +66,6 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
 
 
 async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: BackgroundTasks = None):
-    """
-    Internal function to execute a campaign.
-    Returns (successes, total_actions, status, actions_log).
-    """
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
     if not campaign:
         return 0, 0, "failed", []
@@ -83,27 +82,48 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
         user_id=campaign.user_id,
         action_type="campaign_started",
         description=f"Started campaign '{campaign.name}' on {campaign.platform}",
-        metadata={"campaign_id": campaign.id, "platform": campaign.platform}
+        extra_data={"campaign_id": campaign.id, "platform": campaign.platform}
     )
 
-    # Get YouTube token
-    oauth_token = db.query(OAuthToken).filter(
-        OAuthToken.user_id == campaign.user_id,
-        OAuthToken.provider == "google"
-    ).first()
-    if not oauth_token:
-        campaign.status = CampaignStatus.FAILED
-        campaign.error_message = "YouTube not connected"
-        db.commit()
-        log_activity(
-            user_id=campaign.user_id,
-            action_type="campaign_failed",
-            description=f"Campaign '{campaign.name}' failed: YouTube not connected",
-            metadata={"campaign_id": campaign.id, "error": "YouTube not connected"}
-        )
-        return 0, campaign.target_count, "failed", []
+    # Decide which accounts to use
+    if campaign.use_pool:
+        # Use shared pool for all actions
+        selector = AccountSelector(db)
+        account = selector.select_account(campaign.action_type.value.lower())
+        if not account:
+            campaign.status = CampaignStatus.FAILED
+            campaign.error_message = "No available accounts in pool"
+            db.commit()
+            log_activity(
+                user_id=campaign.user_id,
+                action_type="campaign_failed",
+                description=f"Campaign '{campaign.name}' failed: no pool accounts available",
+                extra_data={"campaign_id": campaign.id, "error": "No pool accounts"}
+            )
+            return 0, campaign.target_count, "failed", []
 
-    yt = YouTubeService(oauth_token.access_token)
+        # Use a single account for all actions (or you could rotate)
+        # For simplicity, we'll use the same account for all actions
+        yt = YouTubeService(account.access_token)  # Access token is stored in pool_accounts
+    else:
+        # Use user's own account
+        oauth_token = db.query(OAuthToken).filter(
+            OAuthToken.user_id == campaign.user_id,
+            OAuthToken.provider == "google"
+        ).first()
+        if not oauth_token:
+            campaign.status = CampaignStatus.FAILED
+            campaign.error_message = "YouTube not connected"
+            db.commit()
+            log_activity(
+                user_id=campaign.user_id,
+                action_type="campaign_failed",
+                description=f"Campaign '{campaign.name}' failed: YouTube not connected",
+                extra_data={"campaign_id": campaign.id, "error": "YouTube not connected"}
+            )
+            return 0, campaign.target_count, "failed", []
+        yt = YouTubeService(oauth_token.access_token)
+
     successes = 0
     actions_log = []
     first_error = None
@@ -201,7 +221,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
             user_id=campaign.user_id,
             action_type="campaign_completed",
             description=f"Campaign '{campaign.name}' completed with {successes}/{campaign.target_count} actions",
-            metadata={"campaign_id": campaign.id, "successes": successes, "total": campaign.target_count}
+            extra_data={"campaign_id": campaign.id, "successes": successes, "total": campaign.target_count}
         )
     else:
         campaign.status = CampaignStatus.FAILED
@@ -210,7 +230,7 @@ async def _run_campaign_logic(campaign_id: int, db: Session, background_tasks: B
             user_id=campaign.user_id,
             action_type="campaign_failed",
             description=f"Campaign '{campaign.name}' failed: {campaign.error_message}",
-            metadata={"campaign_id": campaign.id, "error": campaign.error_message}
+            extra_data={"campaign_id": campaign.id, "error": campaign.error_message}
         )
     db.commit()
 
@@ -261,7 +281,6 @@ async def create_campaign(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Create a new campaign"""
     user = get_current_user_from_token(credentials, db)
 
     try:
@@ -291,7 +310,8 @@ async def create_campaign(
         scheduled_at=campaign_data.scheduled_at,
         webhook_url=str(campaign_data.webhook_url) if campaign_data.webhook_url else None,
         webhook_secret=campaign_data.webhook_secret,
-        platform=campaign_data.platform or "youtube"
+        platform=campaign_data.platform or "youtube",
+        use_pool=campaign_data.use_pool or False
     )
 
     db.add(campaign)
@@ -315,6 +335,7 @@ async def create_campaign(
         "webhook_url": campaign.webhook_url,
         "webhook_secret": campaign.webhook_secret,
         "platform": campaign.platform,
+        "use_pool": campaign.use_pool,
     }
 
 
@@ -375,6 +396,9 @@ async def list_campaigns(
             "scheduled_at": c.scheduled_at,
             "started_at": c.started_at,
             "webhook_url": c.webhook_url,
+            "webhook_secret": c.webhook_secret,
+            "platform": c.platform,
+            "use_pool": c.use_pool,
         })
     return result
 
@@ -402,6 +426,7 @@ async def get_campaign_status(
         "scheduled_at": campaign.scheduled_at,
         "started_at": campaign.started_at,
         "webhook_url": campaign.webhook_url,
+        "use_pool": campaign.use_pool,
     }
 
 

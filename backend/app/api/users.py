@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
+from app.models.activity import ActivityLog
+from app.services.activity_logger import log_activity
 from app.schemas.user import UserResponse
 from app.core.auth import decode_access_token
 

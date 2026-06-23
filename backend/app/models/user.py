@@ -24,6 +24,8 @@ class User(Base):
     website = Column(String, nullable=True)
     location = Column(String, nullable=True)
     wallet_balance = Column(Integer, default=0)  # in cents
+    role = Column(String, default="user")           # 'admin' or 'user'
+    daily_action_limit = Column(Integer, default=5) # per-user rate limit
 
     campaigns = relationship("Campaign", back_populates="owner")
     oauth_tokens = relationship("OAuthToken", back_populates="user")

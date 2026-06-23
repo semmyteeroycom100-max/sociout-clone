@@ -63,12 +63,20 @@ function UserMenu({ user }) {
               <span>My Profile</span>
             </button>
             <button
+              onClick={() => { setIsOpen(false); navigate('/settings'); }}
+              className="flex items-center gap-3 px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Settings</span>
+            </button>
+            <button
               onClick={() => { setIsOpen(false); toggleDarkMode(); }}
               className="flex items-center gap-3 px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition"
             >
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
             </button>
+            <hr className="my-1 border-gray-200 dark:border-gray-700" />
             <button
               onClick={() => { setIsOpen(false); handleLogout(); }}
               className="flex items-center gap-3 px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition text-red-500"
@@ -76,7 +84,6 @@ function UserMenu({ user }) {
               <LogOut className="w-4 h-4" />
               <span>Logout</span>
             </button>
-            <hr className="my-1 border-gray-200 dark:border-gray-700" />
             <button
               onClick={() => { setIsOpen(false); handleDeleteAccount(); }}
               className="flex items-center gap-3 px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition text-red-600"

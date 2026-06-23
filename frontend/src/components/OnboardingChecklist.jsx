@@ -2,19 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, Circle, ArrowRight } from 'lucide-react';
 
 function OnboardingChecklist({ youtubeConnected, tiktokConnected, campaigns }) {
-  const [completed, setCompleted] = useState([]);
   const [dismissed, setDismissed] = useState(false);
 
   const steps = [
     { id: 'connect_youtube', label: 'Connect YouTube account', done: youtubeConnected },
-    { id: 'connect_tiktok', label: 'Connect TikTok account', done: tiktokConnected },
+    { id: 'connect_tiktok', label: 'Connect TikTok (Coming Soon)', done: tiktokConnected || false, comingSoon: true },
     { id: 'create_campaign', label: 'Create your first campaign', done: campaigns.length > 0 },
     { id: 'run_campaign', label: 'Run your first campaign', done: campaigns.some(c => c.status === 'completed' || c.status === 'running') },
   ];
 
   const allDone = steps.every(s => s.done);
 
-  // Auto-dismiss when all done
   useEffect(() => {
     if (allDone) {
       const timer = setTimeout(() => setDismissed(true), 3000);
@@ -46,10 +44,10 @@ function OnboardingChecklist({ youtubeConnected, tiktokConnected, campaigns }) {
             ) : (
               <Circle className="w-5 h-5 text-gray-300 dark:text-gray-600 flex-shrink-0" />
             )}
-            <span className={`text-sm ${step.done ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
-              {step.label}
+            <span className={`text-sm ${step.done ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'} ${step.comingSoon ? 'opacity-50' : ''}`}>
+              {step.label} {step.comingSoon && <span className="text-xs text-blue-500">(Coming Soon)</span>}
             </span>
-            {!step.done && (
+            {!step.done && !step.comingSoon && (
               <ArrowRight className="w-4 h-4 text-blue-500 ml-auto flex-shrink-0" />
             )}
           </div>
