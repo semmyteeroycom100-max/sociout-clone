@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models.user import User, OAuthToken
+from app.models.user import User
+from app.models.oauth import OAuthToken
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.api.oauth import get_youtube_token

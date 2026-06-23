@@ -11,7 +11,9 @@ import random
 from datetime import datetime
 
 from app.database import get_db
-from app.models.user import User, Campaign, CampaignStatus, CampaignActionType, OAuthToken, CampaignAction
+from app.models.user import User
+from app.models.oauth import OAuthToken
+from app.models.campaign import Campaign, CampaignStatus, CampaignActionType, CampaignAction
 from app.schemas.campaign import CampaignCreate
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService

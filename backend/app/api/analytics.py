@@ -7,7 +7,8 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from app.database import get_db
-from app.models.user import User, OAuthToken
+from app.models.user import User
+from app.models.oauth import OAuthToken
 from app.core.auth import decode_access_token
 import os
 import traceback

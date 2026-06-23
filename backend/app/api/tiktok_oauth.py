@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.user import OAuthToken
+from app.models.oauth import OAuthToken
 from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/api/tiktok", tags=["TikTok"])

@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.database import get_db
-from app.models.user import User, Campaign, OAuthToken
+from app.models.user import User, Campaign
+from app.models.oauth import OAuthToken
 from app.schemas.user import UserCreate
 from app.core.auth import decode_access_token, get_password_hash
 from datetime import datetime
@@ -152,3 +153,4 @@ async def make_admin_endpoint(
     user.is_admin = True
     db.commit()
     return {"message": f"Admin rights granted to {user.email}"}
+
