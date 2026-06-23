@@ -1,9 +1,15 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, JSON, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.database import Base
-import uuid
 from sqlalchemy.dialects.postgresql import UUID
+from app.core.database import Base  # Change this to your actual database import
+import uuid
+
+# If ActionJob and ActionLog are defined in other files, import them here
+# to ensure they're registered before defining relationships
+# from app.models.action_job import ActionJob
+# from app.models.action_log import ActionLog
+
 
 class PoolAccount(Base):
     __tablename__ = "pool_accounts"
@@ -26,9 +32,18 @@ class PoolAccount(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 
-    # Relationships
-    action_jobs = relationship("ActionJob", back_populates="account")
-    action_logs = relationship("ActionLog", back_populates="account")
+    # Relationships - using string references with full module paths
+    # This avoids circular import issues
+    action_jobs = relationship(
+        "app.models.action_job.ActionJob", 
+        back_populates="account",
+        lazy="select"
+    )
+    action_logs = relationship(
+        "app.models.action_log.ActionLog", 
+        back_populates="account",
+        lazy="select"
+    )
 
     def __repr__(self):
         return f"<PoolAccount {self.email}>"

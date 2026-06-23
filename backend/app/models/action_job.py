@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.database import Base
-import uuid
 from sqlalchemy.dialects.postgresql import UUID
+from app.core.database import Base  # Changed from app.database to app.core.database
+import uuid
+
 
 class ActionJob(Base):
     __tablename__ = "action_jobs"
@@ -20,10 +21,23 @@ class ActionJob(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 
-    # Relationships
-    user = relationship("User", backref="action_jobs")
-    account = relationship("PoolAccount", back_populates="action_jobs")
-    logs = relationship("ActionLog", back_populates="job")
+    # Relationships - using string references with full module paths
+    # This avoids circular import issues
+    user = relationship(
+        "app.models.user.User",
+        back_populates="action_jobs",
+        lazy="select"
+    )
+    account = relationship(
+        "app.models.pool_account.PoolAccount",
+        back_populates="action_jobs",
+        lazy="select"
+    )
+    logs = relationship(
+        "app.models.action_log.ActionLog",
+        back_populates="job",
+        lazy="select"
+    )
 
     def __repr__(self):
         return f"<ActionJob {self.id} {self.action_type} {self.status}>"
