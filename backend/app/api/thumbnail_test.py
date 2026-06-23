@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
 from app.database import get_db
-from app.models.user import User, ThumbnailTest
+from app.models.user import User
+from app.models.thumbnail import ThumbnailTest
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.api.oauth import get_youtube_token
@@ -144,3 +145,5 @@ async def get_results(test_id: int, credentials: HTTPAuthorizationCredentials = 
         "status": test.status,
         "winner": test.winner
     }
+
+

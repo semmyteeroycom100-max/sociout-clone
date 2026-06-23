@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.database import get_db
-from app.models.user import User, Campaign
+from app.models.user import User
+from app.models.campaign import Campaign
 from app.models.oauth import OAuthToken
 from app.schemas.user import UserCreate
 from app.core.auth import decode_access_token, get_password_hash

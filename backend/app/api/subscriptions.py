@@ -5,7 +5,8 @@ import stripe
 import os
 
 from app.database import get_db
-from app.models.user import User, SubscriptionPlan, UserSubscription
+from app.models.user import User
+from app.models.subscriptions import SubscriptionPlan, UserSubscription
 from app.core.auth import decode_access_token
 from app.core.stripe_config import stripe, get_or_create_price
 
@@ -132,3 +133,5 @@ def create_checkout_session(
         metadata={"user_id": user.id, "plan_name": plan_name}
     )
     return {"checkout_url": checkout_session.url}
+
+

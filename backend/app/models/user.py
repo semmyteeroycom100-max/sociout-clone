@@ -28,6 +28,10 @@ class User(Base):
     daily_action_limit = Column(Integer, default=5)
 
     # Relationships
+    thumbnail_tests = relationship("app.models.thumbnail.ThumbnailTest", back_populates="owner")
+
+
+    
     campaigns = relationship("app.models.campaign.Campaign", back_populates="owner")
     oauth_tokens = relationship("app.models.oauth.OAuthToken", back_populates="user")
     templates = relationship("app.models.campaign.CampaignTemplate", back_populates="owner")
@@ -37,3 +41,4 @@ class User(Base):
 
     def __repr__(self):
         return f"<User {self.username}>"
+

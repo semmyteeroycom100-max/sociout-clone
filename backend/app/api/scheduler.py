@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.database import get_db
-from app.models.user import Campaign, CampaignStatus
+from app.models.campaign import Campaign, CampaignStatus
 from app.api.campaigns import _run_campaign_logic  # import the reusable function
 
 router = APIRouter(prefix="/api/scheduler", tags=["Scheduler"])
@@ -38,3 +38,5 @@ async def check_scheduled_campaigns(db: Session = Depends(get_db)):
         "campaigns_found": len(campaigns),
         "results": results
     }
+
+

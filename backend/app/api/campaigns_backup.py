@@ -6,7 +6,8 @@ import re
 import json
 
 from app.database import get_db
-from app.models.user import User, Campaign, CampaignStatus, CampaignActionType
+from app.models.user import User
+from app.models.campaign import Campaign, CampaignStatus, CampaignActionType
 from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignDetailResponse
 from app.core.auth import decode_access_token
 from app.workers.campaign_tasks import execute_campaign
