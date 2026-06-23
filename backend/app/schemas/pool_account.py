@@ -25,7 +25,7 @@ class PoolAccount(Base):
     cooldown_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
-
+    campaign_actions = relationship("app.models.campaign.CampaignAction", back_populates="account")
     action_jobs = relationship("ActionJob", back_populates="account")
     action_logs = relationship("ActionLog", back_populates="account")
 

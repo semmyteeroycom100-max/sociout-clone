@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Foreign
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
-from app.core.database import Base  # Change this to your actual database import
+from app.database import Base  # Change this to your actual database import
 import uuid
 
 # If ActionJob and ActionLog are defined in other files, import them here
