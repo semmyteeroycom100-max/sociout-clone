@@ -7,7 +7,8 @@ import os
 import httpx
 
 from app.database import get_db
-from app.models.user import User, OAuthToken
+from app.models.user import User
+from app.models.oauth import OAuthToken          # <-- fixed import
 from app.core.auth import create_access_token, decode_access_token
 from app.core.oauth_config import oauth
 
