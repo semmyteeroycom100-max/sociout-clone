@@ -1,37 +1,33 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, JSON
+from sqlalchemy.orm import relationship   # <-- ADD THIS
+from sqlalchemy.sql import func
+from app.database import Base
 import uuid
+from sqlalchemy.dialects.postgresql import UUID
 
-class PoolAccountCreate(BaseModel):
-    email: EmailStr
-    channel_id: Optional[str] = None
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    token_expiry: Optional[datetime] = None
-    cookie_json: Optional[str] = None
-    proxy: Optional[str] = None
+class PoolAccount(Base):
+    __tablename__ = "pool_accounts"
 
-class PoolAccountUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    status: Optional[str] = None
-    proxy: Optional[str] = None
-    daily_subscribe_count: Optional[int] = None
-    daily_like_count: Optional[int] = None
-    daily_comment_count: Optional[int] = None
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False)
+    channel_id = Column(String(255), nullable=True)
+    access_token = Column(Text, nullable=True)
+    refresh_token = Column(Text, nullable=True)
+    token_expiry = Column(DateTime, nullable=True)
+    cookie_json = Column(Text, nullable=True)
+    proxy = Column(String(255), nullable=True)
+    status = Column(String(20), default='active')
+    daily_subscribe_count = Column(Integer, default=0)
+    daily_like_count = Column(Integer, default=0)
+    daily_comment_count = Column(Integer, default=0)
+    last_reset_date = Column(DateTime, default=func.now())
+    last_used_at = Column(DateTime, nullable=True)
+    cooldown_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
-class PoolAccountResponse(BaseModel):
-    id: uuid.UUID
-    email: str
-    channel_id: Optional[str]
-    status: str
-    daily_subscribe_count: int
-    daily_like_count: int
-    daily_comment_count: int
-    last_used_at: Optional[datetime]
-    cooldown_until: Optional[datetime]
-    created_at: datetime
-    updated_at: datetime
+    action_jobs = relationship("ActionJob", back_populates="account")
+    action_logs = relationship("ActionLog", back_populates="account")
 
-    class Config:
-        from_attributes = True
+    def __repr__(self):
+        return f"<PoolAccount {self.email}>"
