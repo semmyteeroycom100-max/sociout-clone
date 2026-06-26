@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+import shutil
+import os
 
 from app.database import get_db
 from app.models.user import User
@@ -43,6 +45,7 @@ def get_current_user(
         )
     
     return user
+
 @router.get("/me/profile")
 def get_my_profile(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -94,3 +97,42 @@ def get_my_activity(
         "metadata": a.metadata,
         "created_at": a.created_at,
     } for a in activities]
+
+# ========== AVATAR UPLOAD ==========
+@router.post("/avatar")
+async def upload_avatar(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload an avatar image for the authenticated user.
+    The image is saved to static/avatars/ and the user's avatar_url is updated.
+    """
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Ensure the avatars directory exists
+    os.makedirs("static/avatars", exist_ok=True)
+    
+    # Generate a unique filename (user_id + original filename)
+    file_extension = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    safe_filename = f"{user.id}_{datetime.utcnow().timestamp()}{file_extension}"
+    file_path = f"static/avatars/{safe_filename}"
+    
+    # Save the file
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Update the user's avatar_url (relative path)
+    avatar_url = f"/static/avatars/{safe_filename}"
+    user.avatar_url = avatar_url
+    db.commit()
+    
+    return {"avatar_url": avatar_url}

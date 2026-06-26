@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Globe, MapPin, Calendar, TrendingUp, PlayCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import Avatar from '../components/Avatar';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
@@ -11,12 +12,17 @@ function Profile() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [formData, setFormData] = useState({ bio: '', website: '', location: '' });
   const { addToast } = useToast();
   const navigate = useNavigate();
 
+  // Get token from localStorage
+  const getToken = () => localStorage.getItem('token');
+
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) {
       navigate('/login');
       return;
@@ -28,7 +34,7 @@ function Profile() {
 
   const fetchProfile = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE}/users/me/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -46,7 +52,7 @@ function Profile() {
 
   const fetchActivities = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE}/users/me/activity?limit=20`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -59,7 +65,7 @@ function Profile() {
 
   const fetchCampaigns = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE}/campaigns/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -75,7 +81,7 @@ function Profile() {
   const updateProfile = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE}/users/me/profile`, {
         method: 'PUT',
         headers: {
@@ -96,6 +102,40 @@ function Profile() {
     }
   };
 
+  const handleAvatarUpload = async () => {
+    if (!avatarFile) {
+      addToast('Please select an image first', 'warning');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    const formData = new FormData();
+    formData.append('avatar', avatarFile);
+
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/users/avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfile({ ...profile, avatar_url: data.avatar_url });
+        addToast('Avatar updated successfully', 'success');
+        setAvatarFile(null);
+        // Refresh profile to get updated data
+        fetchProfile();
+      } else {
+        addToast(data.detail || 'Failed to upload avatar', 'error');
+      }
+    } catch (err) {
+      addToast('Error uploading avatar', 'error');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const stats = {
     totalCampaigns: campaigns.length,
     running: campaigns.filter(c => c.status === 'running').length,
@@ -103,19 +143,36 @@ function Profile() {
     failed: campaigns.filter(c => c.status === 'failed').length,
   };
 
-  if (loading) return <div className="p-8 text-center">Loading profile...</div>;
+  if (loading) return <div className="p-8 text-center dark:text-white">Loading profile...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-4xl mx-auto">
         {/* Profile Header */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-6">
-          <div className="flex items-start gap-6">
-            <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-3xl font-bold flex-shrink-0">
-              {profile?.username?.charAt(0).toUpperCase() || 'U'}
+          <div className="flex flex-col md:flex-row items-start gap-6">
+            {/* Avatar Section with Upload */}
+            <div className="flex flex-col items-center gap-2">
+              <Avatar user={profile} size="xl" className="border-4 border-blue-500" />
+              <div className="flex flex-col items-center gap-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setAvatarFile(e.target.files[0])}
+                  className="text-xs text-gray-500 dark:text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-300"
+                />
+                <button
+                  onClick={handleAvatarUpload}
+                  disabled={!avatarFile || uploadingAvatar}
+                  className="text-xs px-3 py-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploadingAvatar ? 'Uploading...' : 'Upload Avatar'}
+                </button>
+              </div>
             </div>
+
             <div className="flex-1">
-              <div className="flex justify-between items-start">
+              <div className="flex flex-col md:flex-row justify-between items-start gap-2">
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{profile?.username}</h1>
                   <p className="text-gray-500 dark:text-gray-400">{profile?.email}</p>
@@ -128,7 +185,7 @@ function Profile() {
                 </div>
                 <button
                   onClick={() => setEditing(!editing)}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm whitespace-nowrap"
                 >
                   {editing ? 'Cancel' : 'Edit Profile'}
                 </button>
@@ -137,31 +194,31 @@ function Profile() {
           </div>
 
           {editing && (
-            <form onSubmit={updateProfile} className="mt-4 border-t pt-4">
+            <form onSubmit={updateProfile} className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Bio</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Bio</label>
                   <textarea
-                    className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                    className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                     rows="2"
                     value={formData.bio}
                     onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Website</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Website</label>
                   <input
                     type="url"
-                    className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                    className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                     value={formData.website}
                     onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Location</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Location</label>
                   <input
                     type="text"
-                    className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                    className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   />
@@ -196,7 +253,7 @@ function Profile() {
 
         {/* Activity Feed */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Recent Activity</h2>
           {activities.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400">No recent activity.</p>
           ) : (
@@ -223,15 +280,15 @@ function Profile() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <a href="/dashboard" className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition">
             <TrendingUp className="w-6 h-6 mx-auto text-blue-500" />
-            <p className="mt-1 text-sm font-medium">Dashboard</p>
+            <p className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">Dashboard</p>
           </a>
           <a href="/campaigns" className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition">
             <PlayCircle className="w-6 h-6 mx-auto text-green-500" />
-            <p className="mt-1 text-sm font-medium">My Campaigns</p>
+            <p className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">My Campaigns</p>
           </a>
           <a href="/analytics" className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center hover:shadow-md transition">
             <TrendingUp className="w-6 h-6 mx-auto text-purple-500" />
-            <p className="mt-1 text-sm font-medium">Analytics</p>
+            <p className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">Analytics</p>
           </a>
         </div>
       </div>
