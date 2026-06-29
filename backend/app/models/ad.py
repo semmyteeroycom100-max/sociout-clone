@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index, Enum
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
@@ -22,7 +22,7 @@ class Ad(Base):
     media_url = Column(Text, nullable=False)           # renamed from image_url
     media_type = Column(String, default="image")       # 'image' or 'video'
     target_url = Column(Text, nullable=False)
-    slot = Column(Enum(AdSlot), nullable=False)
+    slot = Column(Enum(AdSlot), nullable=False)        # uses SQLAlchemy Enum
     duration_days = Column(Integer, nullable=False)
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True)
@@ -41,7 +41,7 @@ class Ad(Base):
 class AdSlotPrice(Base):
     __tablename__ = "ad_slot_prices"
     id = Column(Integer, primary_key=True, index=True)
-    slot = Column(String, nullable=False)
+    slot = Column(String, nullable=False)              # simple string, not Enum
     duration_days = Column(Integer, nullable=False)
     price_cents = Column(Integer, nullable=False)
     stripe_price_id = Column(String, nullable=True)
