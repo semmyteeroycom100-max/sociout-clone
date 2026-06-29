@@ -1,9 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum
+﻿from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
-
 
 class CampaignStatus(enum.Enum):
     PENDING = "pending"
@@ -12,13 +11,11 @@ class CampaignStatus(enum.Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
 
-
 class CampaignActionType(enum.Enum):
     LIKE = "LIKE"
     SUBSCRIBE = "SUBSCRIBE"
     COMMENT = "COMMENT"
     FOLLOW = "FOLLOW"
-
 
 class Campaign(Base):
     __tablename__ = "campaigns"
@@ -44,14 +41,13 @@ class Campaign(Base):
     webhook_url = Column(String, nullable=True)
     webhook_secret = Column(String, nullable=True)
     platform = Column(String, default='youtube')
-    
-    owner = relationship("app.models.user.User", back_populates="campaigns")
-    actions = relationship("app.models.campaign.CampaignAction", back_populates="campaign")
-    action_logs = relationship("app.models.action_log.ActionLog", back_populates="campaign")
+
+    owner = relationship("User", back_populates="campaigns")
+    actions = relationship("CampaignAction", back_populates="campaign")
+    action_logs = relationship("ActionLog", back_populates="campaign")  # <-- FIXED: added back_populates
 
     def __repr__(self):
         return f"<Campaign {self.name} - {self.status.value}>"
-
 
 class CampaignAction(Base):
     __tablename__ = "campaign_actions"
@@ -63,12 +59,11 @@ class CampaignAction(Base):
     youtube_response = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    campaign = relationship("app.models.campaign.Campaign", back_populates="actions")
+
+    campaign = relationship("Campaign", back_populates="actions")
 
     def __repr__(self):
         return f"<CampaignAction {self.id} - {'Success' if self.success else 'Failed'}>"
-
 
 class CampaignTemplate(Base):
     __tablename__ = "campaign_templates"
@@ -84,7 +79,7 @@ class CampaignTemplate(Base):
     scheduled_days_offset = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    owner = relationship("app.models.user.User", back_populates="templates")
+    owner = relationship("User", back_populates="templates")
 
     def __repr__(self):
         return f"<CampaignTemplate {self.name}>"
