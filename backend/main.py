@@ -17,6 +17,11 @@ from app.api import templates
 from app.api import scheduler
 from app.api import ads
 
+# ===== NEW IMPORTS =====
+from app.api import articles, admin_users, feedback, support, admin_audit
+# Import new models so they are registered with SQLAlchemy
+from app.models import Article, Feedback, SupportContribution, AdminAction
+
 # Load environment variables first
 load_dotenv()
 
@@ -66,7 +71,7 @@ app.add_middleware(
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-# Include routers
+# ===== INCLUDE ROUTERS =====
 app.include_router(password_reset.router)
 app.include_router(auth.router)
 app.include_router(users.router)
@@ -81,6 +86,13 @@ app.include_router(subscriptions.router)
 app.include_router(templates.router)
 app.include_router(scheduler.router)
 app.include_router(ads.router)
+
+# ===== NEW ROUTERS (Admin & CMS) =====
+app.include_router(articles.router)
+app.include_router(admin_users.router)
+app.include_router(feedback.router)
+app.include_router(support.router)
+app.include_router(admin_audit.router)
 
 @app.get("/")
 async def root():

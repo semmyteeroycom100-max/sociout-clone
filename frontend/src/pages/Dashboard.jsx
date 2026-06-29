@@ -34,25 +34,28 @@ import {
 import Logo from '../components/Logo';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { useYouTube } from '../context/YouTubeContext';
 import { playClick, toggleSound } from '../utils/sound';
 import TopBannerAd from '../components/TopBannerAd';
 import UserMenu from '../components/UserMenu';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import Tooltip from '../components/Tooltip';
 import Tip from '../components/Tip';
+import WelcomeModal from '../components/WelcomeModal';
+import Footer from '../components/Footer';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
 function Dashboard() {
   const { addToast } = useToast();
   const { darkMode, toggleDarkMode } = useTheme();
+  const { isConnected: youtubeConnected, loading: youtubeLoading, refreshStatus } = useYouTube();
   const [user, setUser] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [filteredCampaigns, setFilteredCampaigns] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
-  const [youtubeConnected, setYoutubeConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedCampaigns, setSelectedCampaigns] = useState([]);
@@ -67,6 +70,7 @@ function Dashboard() {
   });
   const [scheduledDate, setScheduledDate] = useState('');
   const [commentListText, setCommentListText] = useState('');
+  const [showWelcome, setShowWelcome] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -77,8 +81,13 @@ function Dashboard() {
     }
     loadUser();
     loadCampaigns();
-    checkYoutubeStatus();
     loadActivities();
+    // Show Welcome Modal if first visit
+    const hasVisited = localStorage.getItem('hasVisitedResourceHub');
+    if (!hasVisited) {
+      setShowWelcome(true);
+      localStorage.setItem('hasVisitedResourceHub', 'true');
+    }
   }, []);
 
   const loadUser = async () => {
@@ -120,17 +129,8 @@ function Dashboard() {
     }
   };
 
-  const checkYoutubeStatus = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/auth/youtube/status`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      const data = await response.json();
-      setYoutubeConnected(data.connected);
-    } catch (err) {
-      console.error('Failed to check YouTube status');
-    }
-  };
+  // YouTube status is now handled by YouTubeContext – no need to fetch here.
+  // If the user reconnects, we can call refreshStatus() from context.
 
   const resetYoutubeConnection = async () => {
     playClick();
@@ -143,8 +143,9 @@ function Dashboard() {
       });
       if (response.ok) {
         addToast('YouTube connection reset. Please reconnect.', 'success');
-        localStorage.removeItem('token');
-        window.location.reload();
+        refreshStatus(); // Refresh context status
+        // Redirect to OAuth if needed
+        window.location.href = `${API_BASE}/auth/google`;
       } else {
         addToast('Failed to reset YouTube connection', 'error');
       }
@@ -429,7 +430,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex flex-col">
       {/* Mobile menu backdrop */}
       {mobileMenuOpen && (
         <div
@@ -496,7 +497,12 @@ function Dashboard() {
           <div className="my-2 border-t border-gray-700"></div>
           <div className="px-3 py-2">
             <p className="text-xs text-gray-400 uppercase tracking-wider">Platforms</p>
-            {!youtubeConnected ? (
+            {youtubeLoading ? (
+              <div className="flex items-center gap-2 px-3 py-2 mt-2 text-sm text-gray-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent" />
+                Checking...
+              </div>
+            ) : !youtubeConnected ? (
               <a href={`${API_BASE}/auth/google`} className="flex items-center gap-3 px-3 py-2 mt-2 text-sm text-red-400 hover:text-red-300 hover:bg-white/5 rounded-lg transition">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -540,7 +546,7 @@ function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="md:ml-64 p-4 md:p-8">
+      <main className="md:ml-64 p-4 md:p-8 flex-1">
         {/* Mobile header */}
         <div className="md:hidden flex items-center justify-between mb-4">
           <button onClick={() => setMobileMenuOpen(true)} className="text-gray-600 dark:text-gray-300">
@@ -606,8 +612,8 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* YouTube not connected warning */}
-        {!youtubeConnected && (
+        {/* YouTube not connected warning – now uses context */}
+        {!youtubeLoading && !youtubeConnected && (
           <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 mb-6 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
             <p className="text-yellow-800 dark:text-yellow-300 text-sm">
@@ -813,6 +819,20 @@ function Dashboard() {
           💡 Download CSV to analyze your campaign performance offline.
         </Tip>
       </main>
+
+      {/* Footer */}
+      <Footer />
+
+      {/* Welcome Modal */}
+      {showWelcome && (
+        <WelcomeModal
+          onClose={() => setShowWelcome(false)}
+          onExplore={() => {
+            setShowWelcome(false);
+            navigate('/resources');
+          }}
+        />
+      )}
 
       {/* Create Campaign Modal – WITHOUT the shared pool toggle */}
       {showModal && (

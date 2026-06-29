@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, LogOut, Trash2, Settings, Sun, Moon } from 'lucide-react';
+import { User, LogOut, Trash2, Settings, Sun, Moon, Shield } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 
@@ -69,6 +69,16 @@ function UserMenu({ user }) {
               <Settings className="w-4 h-4" />
               <span>Settings</span>
             </button>
+            {/* Admin Panel link – only visible if user is admin */}
+            {user?.is_admin && (
+              <button
+                onClick={() => { setIsOpen(false); navigate('/admin'); }}
+                className="flex items-center gap-3 px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition text-blue-600 dark:text-blue-400"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Admin Panel</span>
+              </button>
+            )}
             <button
               onClick={() => { setIsOpen(false); toggleDarkMode(); }}
               className="flex items-center gap-3 px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition"

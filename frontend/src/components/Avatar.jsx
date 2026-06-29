@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 
 const Avatar = ({ user, size = 'md', className = '' }) => {
   const [imgError, setImgError] = useState(false);

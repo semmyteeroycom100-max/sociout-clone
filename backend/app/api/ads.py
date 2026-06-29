@@ -49,7 +49,7 @@ def get_available_slots(db: Session = Depends(get_db)):
     prices = db.query(AdSlotPrice).all()
     result = {}
     for p in prices:
-        slot = p.slot.value
+        slot = p.slot   # just the string value
         if slot not in result:
             result[slot] = []
         result[slot].append({"duration_days": p.duration_days, "price_cents": p.price_cents})

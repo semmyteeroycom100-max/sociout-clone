@@ -1,8 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
-from app.database import Base
+from app.core.database import Base  # Changed from app.database to app.core.database
 import uuid
 
 
@@ -12,16 +12,17 @@ class ActionLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(UUID(as_uuid=True), ForeignKey("action_jobs.id"), nullable=True)
     account_id = Column(UUID(as_uuid=True), ForeignKey("pool_accounts.id"), nullable=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     action_type = Column(String(20), nullable=False)  # subscribe, like, comment
     target = Column(String(255), nullable=False)      # channel_id or video_id
-    status = Column(String(20), nullable=False)       # success, failed
+    success = Column(Boolean, default=False)
+    response_code = Column(Integer, nullable=True)
+    response_body = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
-    response_data = Column(JSON, nullable=True)
-    performed_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime, server_default=func.now())
 
     # Relationships - using string references with full module paths
+    # This avoids circular import issues
     job = relationship(
         "app.models.action_job.ActionJob",
         back_populates="logs",
@@ -34,14 +35,9 @@ class ActionLog(Base):
     )
     user = relationship(
         "app.models.user.User",
-        back_populates="action_logs",
-        lazy="select"
-    )
-    campaign = relationship(
-        "app.models.campaign.Campaign",
-        back_populates="action_logs",
+        back_populates="action_logs",  # Changed from backref to back_populates
         lazy="select"
     )
 
     def __repr__(self):
-        return f"<ActionLog {self.action_type} - {self.status}>"
+        return f"<ActionLog {self.action_type} - {'Success' if self.success else 'Failed'}>"

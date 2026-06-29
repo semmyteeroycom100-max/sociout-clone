@@ -1,4 +1,4 @@
-﻿let audio = null;
+let audio = null;
 
 export const preloadSound = () => {
   if (!audio) {
@@ -22,7 +22,7 @@ export const playClickSound = () => {
   audio.play().catch(() => {});
 };
 
-// Keep old exports for backward compatibility
+// Keep the old exports for backward compatibility
 export const toggleSound = () => {
   const current = localStorage.getItem('soundEnabled') !== 'false';
   const newState = !current;
