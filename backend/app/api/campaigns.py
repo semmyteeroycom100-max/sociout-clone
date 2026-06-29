@@ -400,7 +400,7 @@ async def list_campaigns(
             "webhook_url": c.webhook_url,
             "webhook_secret": c.webhook_secret,
             "platform": c.platform,
-            "use_pool": c.use_pool,
+          #  "use_pool": c.use_pool,
         })
     return result
 

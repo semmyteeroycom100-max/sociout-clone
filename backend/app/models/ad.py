@@ -22,7 +22,7 @@ class Ad(Base):
     media_url = Column(Text, nullable=False)           # renamed from image_url
     media_type = Column(String, default="image")       # 'image' or 'video'
     target_url = Column(Text, nullable=False)
-    slot = Column(String, nullable=False)
+    slot = Column(Enum(AdSlot), nullable=False)
     duration_days = Column(Integer, nullable=False)
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True)
