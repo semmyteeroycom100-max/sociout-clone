@@ -6,7 +6,8 @@ from typing import Optional, List
 import json
 
 from app.database import get_db
-from app.models.user import User, CampaignTemplate, CampaignActionType
+from app.models.user import User
+from app.models.campaign import CampaignTemplate, CampaignActionType
 from app.core.auth import decode_access_token
 
 router = APIRouter(prefix="/api/templates", tags=["Campaign Templates"])
