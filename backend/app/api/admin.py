@@ -154,4 +154,74 @@ async def make_admin_endpoint(
     user.is_admin = True
     db.commit()
     return {"message": f"Admin rights granted to {user.email}"}
+# ===== ADD THESE MISSING ENDPOINTS =====
+
+@router.get("/stats")
+def get_admin_stats(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(credentials, db)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin required")
+    
+    total_users = db.query(User).count()
+    total_campaigns = db.query(Campaign).count()
+    youtube_connected = db.query(OAuthToken).filter(OAuthToken.provider == "google").count()
+    tiktok_connected = db.query(OAuthToken).filter(OAuthToken.provider == "tiktok").count()
+    
+    return {
+        "total_users": total_users,
+        "total_campaigns": total_campaigns,
+        "youtube_connected": youtube_connected,
+        "tiktok_connected": tiktok_connected,
+    }
+
+@router.get("/all-campaigns")
+def get_all_campaigns(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(credentials, db)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin required")
+    
+    campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).all()
+    return [
+        {
+            "id": c.id,
+            "user_id": c.user_id,
+            "name": c.name,
+            "action_type": c.action_type.value if hasattr(c.action_type, 'value') else c.action_type,
+            "status": c.status.value if hasattr(c.status, 'value') else c.status,
+            "completed_count": c.completed_count,
+            "target_count": c.target_count,
+            "created_at": c.created_at,
+        }
+        for c in campaigns
+    ]
+
+@router.get("/user-connections")
+def get_user_connections(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(credentials, db)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin required")
+    
+    users = db.query(User).all()
+    result = []
+    for u in users:
+        oauths = db.query(OAuthToken).filter(OAuthToken.user_id == u.id).all()
+        youtube = any(o.provider == "google" for o in oauths)
+        tiktok = any(o.provider == "tiktok" for o in oauths)
+        result.append({
+            "user_id": u.id,
+            "email": u.email,
+            "username": u.username,
+            "youtube": youtube,
+            "tiktok": tiktok,
+        })
+    return result
 

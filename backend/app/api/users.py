@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import shutil
 import os
+from datetime import datetime  # <-- ADDED for avatar upload
 
 from app.database import get_db
 from app.models.user import User
@@ -136,3 +137,17 @@ async def upload_avatar(
     db.commit()
     
     return {"avatar_url": avatar_url}
+
+# ========== GAMIFICATION ==========
+@router.get("/me/gamification")
+def get_gamification(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(credentials, db)
+    return {
+        "xp": user.xp or 0,
+        "level": user.level or 1,
+        "streak_days": user.streak_days or 0,
+        "next_level_xp": ((user.level or 1) * 100)  # XP needed for next level
+    }

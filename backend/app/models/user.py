@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
-
 class User(Base):
     __tablename__ = "users"
 
@@ -27,14 +26,17 @@ class User(Base):
     role = Column(String, default="user")
     daily_action_limit = Column(Integer, default=5)
 
-    # ===== NEW GAMIFICATION FIELDS =====
+    # Gamification fields
     xp = Column(Integer, default=0)
     level = Column(Integer, default=1)
     streak_days = Column(Integer, default=0)
     last_active = Column(DateTime(timezone=True), nullable=True)
 
-    # ===== RELATIONSHIPS =====
-    # Existing ones
+    # ===== REFERRAL FIELDS (NEW) =====
+    referral_code = Column(String(50), unique=True, index=True, nullable=True)
+    referred_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Relationships
     thumbnail_tests = relationship("app.models.thumbnail.ThumbnailTest", back_populates="owner")
     campaigns = relationship("app.models.campaign.Campaign", back_populates="owner")
     oauth_tokens = relationship("app.models.oauth.OAuthToken", back_populates="user")
@@ -42,11 +44,12 @@ class User(Base):
     subscription = relationship("app.models.subscriptions.UserSubscription", back_populates="user", uselist=False)
     action_jobs = relationship("app.models.action_job.ActionJob", back_populates="user")
     action_logs = relationship("app.models.action_log.ActionLog", back_populates="user")
-
-    # ===== NEW RELATIONSHIPS =====
     feedback = relationship("app.models.feedback.Feedback", back_populates="user")
     support_contributions = relationship("app.models.support.SupportContribution", back_populates="user")
     admin_actions = relationship("app.models.admin_action.AdminAction", foreign_keys="[AdminAction.admin_id]", back_populates="admin")
+    # Referral relationships
+    referrals_made = relationship("Referral", foreign_keys="[Referral.referrer_id]", back_populates="referrer")
+    referrals_received = relationship("Referral", foreign_keys="[Referral.referred_id]", back_populates="referred")
 
     def __repr__(self):
         return f"<User {self.username}>"

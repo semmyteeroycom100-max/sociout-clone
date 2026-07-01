@@ -13,12 +13,13 @@ import secrets
 from app.database import engine, Base
 from app.api import auth, users, oauth, youtube, campaigns, password_reset, admin, analytics, thumbnail_test
 from app.api import subscriptions
+from app.api import referral
 from app.api import templates 
 from app.api import scheduler
 from app.api import ads
 
 # ===== NEW IMPORTS =====
-from app.api import articles, admin_users, feedback, support, admin_audit
+from app.api import articles, admin_users, feedback, support, admin_audit, admin_pool
 # Import new models so they are registered with SQLAlchemy
 from app.models import Article, Feedback, SupportContribution, AdminAction
 
@@ -86,6 +87,7 @@ app.include_router(subscriptions.router)
 app.include_router(templates.router)
 app.include_router(scheduler.router)
 app.include_router(ads.router)
+app.include_router(referral.router)
 
 # ===== NEW ROUTERS (Admin & CMS) =====
 app.include_router(articles.router)
@@ -93,6 +95,7 @@ app.include_router(admin_users.router)
 app.include_router(feedback.router)
 app.include_router(support.router)
 app.include_router(admin_audit.router)
+app.include_router(admin_pool.router)  # <-- ADDED missing admin pool router
 
 @app.get("/")
 async def root():

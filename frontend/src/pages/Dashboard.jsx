@@ -43,6 +43,11 @@ import Tooltip from '../components/Tooltip';
 import Tip from '../components/Tip';
 import WelcomeModal from '../components/WelcomeModal';
 import Footer from '../components/Footer';
+// ===== NEW IMPORTS =====
+import GamificationCard from '../components/GamificationCard';
+import FeedbackButton from '../components/FeedbackButton';
+import SupportButton from '../components/SupportButton';
+import BackButton from '../components/BackButton';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
@@ -129,9 +134,6 @@ function Dashboard() {
     }
   };
 
-  // YouTube status is now handled by YouTubeContext – no need to fetch here.
-  // If the user reconnects, we can call refreshStatus() from context.
-
   const resetYoutubeConnection = async () => {
     playClick();
     if (!confirm('Reset YouTube connection? You will need to reconnect.')) return;
@@ -143,8 +145,7 @@ function Dashboard() {
       });
       if (response.ok) {
         addToast('YouTube connection reset. Please reconnect.', 'success');
-        refreshStatus(); // Refresh context status
-        // Redirect to OAuth if needed
+        refreshStatus();
         window.location.href = `${API_BASE}/auth/google`;
       } else {
         addToast('Failed to reset YouTube connection', 'error');
@@ -531,6 +532,11 @@ function Dashboard() {
               TikTok (Coming Soon)
             </div>
           </div>
+
+          {/* ===== GAMIFICATION CARD ===== */}
+          <div className="px-3 py-2 mt-2">
+            <GamificationCard />
+          </div>
         </nav>
 
         {/* Bottom – Logout */}
@@ -557,11 +563,14 @@ function Dashboard() {
           <Logo className="w-8 h-8" />
         </div>
 
-        {/* Header with UserMenu */}
+        {/* Header with Back Button and UserMenu */}
         <div className="flex justify-between items-center mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Overview</h1>
-            <p className="text-gray-500 dark:text-gray-400">Manage your YouTube automation campaigns</p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Overview</h1>
+              <p className="text-gray-500 dark:text-gray-400">Manage your YouTube automation campaigns</p>
+            </div>
           </div>
           <UserMenu user={user} />
         </div>
@@ -833,6 +842,10 @@ function Dashboard() {
           }}
         />
       )}
+
+      {/* Floating Buttons */}
+      <FeedbackButton />
+      <SupportButton />
 
       {/* Create Campaign Modal – WITHOUT the shared pool toggle */}
       {showModal && (

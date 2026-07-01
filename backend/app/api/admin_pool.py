@@ -20,10 +20,29 @@ def require_admin(credentials: HTTPAuthorizationCredentials, db: Session):
         raise HTTPException(status_code=401, detail="Invalid token")
     email = payload.get("sub")
     user = db.query(User).filter(User.email == email).first()
-    if not user or user.role != 'admin':
+    if not user or not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+# --- Root endpoints (for frontend compatibility) ---
+@router.get("/")
+def list_accounts_root(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100
+):
+    return list_accounts(credentials, db, skip, limit)
+
+@router.post("/")
+def add_account_root(
+    account_data: PoolAccountCreate,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    return add_account(account_data, credentials, db)
+
+# --- Original endpoints (still under /accounts) ---
 @router.post("/accounts")
 def add_account(
     account_data: PoolAccountCreate,
@@ -32,7 +51,6 @@ def add_account(
 ):
     require_admin(credentials, db)
 
-    # Encrypt tokens before storing
     access_enc = encrypt_token(account_data.access_token) if account_data.access_token else None
     refresh_enc = encrypt_token(account_data.refresh_token) if account_data.refresh_token else None
     cookie_enc = encrypt_token(account_data.cookie_json) if account_data.cookie_json else None
@@ -50,7 +68,6 @@ def add_account(
     db.add(account)
     db.commit()
     db.refresh(account)
-
     return {"message": "Account added", "id": account.id}
 
 @router.get("/accounts")
@@ -62,7 +79,8 @@ def list_accounts(
 ):
     require_admin(credentials, db)
     accounts = db.query(PoolAccount).offset(skip).limit(limit).all()
-    return [PoolAccountResponse.from_orm(a) for a in accounts]
+    # Use from_attributes for Pydantic v2
+    return [PoolAccountResponse.model_validate(a).dict() for a in accounts]
 
 @router.put("/accounts/{account_id}")
 def update_account(
@@ -76,7 +94,11 @@ def update_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    for key, value in account_data.dict(exclude_unset=True).items():
+    update_data = account_data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        if key in ['access_token', 'refresh_token', 'cookie_json'] and value:
+            # Re‑encrypt if provided
+            value = encrypt_token(value)
         setattr(account, key, value)
     db.commit()
     return {"message": "Account updated"}
@@ -91,7 +113,6 @@ def delete_account(
     account = db.query(PoolAccount).filter(PoolAccount.id == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-
     db.delete(account)
     db.commit()
     return {"message": "Account deleted"}

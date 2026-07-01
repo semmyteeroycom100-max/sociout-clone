@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, MessageSquare, Shield, Database, 
   Plus, Edit, Trash2, Search, ChevronDown, ChevronUp, 
-  Eye, CheckCircle, XCircle, AlertCircle 
+  Eye, CheckCircle, XCircle, AlertCircle, X
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import ArticleEditor from '../components/ArticleEditor';
@@ -42,7 +42,7 @@ function AdminPanel() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Load stats (always)
+      // Load stats
       const statsRes = await fetch(`${API_BASE}/admin/stats`, { headers });
       if (statsRes.status === 403) {
         addToast('Admin access required', 'error');
@@ -54,14 +54,14 @@ function AdminPanel() {
         setStats(statsData);
       }
 
-      // Load campaigns (always)
+      // Load campaigns
       const campaignsRes = await fetch(`${API_BASE}/admin/all-campaigns`, { headers });
       if (campaignsRes.ok) {
         const campaignsData = await campaignsRes.json();
         setCampaigns(campaignsData);
       }
 
-      // Load data based on active tab
+      // Load users
       if (activeTab === 'users' || activeTab === 'overview') {
         const usersRes = await fetch(`${API_BASE}/admin/users`, { headers });
         if (usersRes.ok) {
@@ -70,6 +70,7 @@ function AdminPanel() {
         }
       }
 
+      // Load articles
       if (activeTab === 'articles') {
         const articlesRes = await fetch(`${API_BASE}/articles/`, { headers });
         if (articlesRes.ok) {
@@ -78,6 +79,7 @@ function AdminPanel() {
         }
       }
 
+      // Load feedback
       if (activeTab === 'feedback') {
         const feedbackRes = await fetch(`${API_BASE}/feedback/`, { headers });
         if (feedbackRes.ok) {
@@ -86,6 +88,7 @@ function AdminPanel() {
         }
       }
 
+      // Load audit
       if (activeTab === 'audit') {
         const auditRes = await fetch(`${API_BASE}/admin/audit/`, { headers });
         if (auditRes.ok) {

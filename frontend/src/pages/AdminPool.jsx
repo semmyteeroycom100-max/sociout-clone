@@ -1,19 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
 function AdminPool() {
   const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    access_token: '',
-    refresh_token: '',
-    token_expiry: ''
-  });
+  const [loading, setLoading] = useState(false);
+  const [newAccount, setNewAccount] = useState({ email: '', channel_id: '', proxy: '' });
+  const [showAdd, setShowAdd] = useState(false);
   const { addToast } = useToast();
   const navigate = useNavigate();
 
@@ -27,15 +23,28 @@ function AdminPool() {
   }, []);
 
   const fetchAccounts = async () => {
+    setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/admin/pool/accounts`, {
+      // ✅ CORRECT ENDPOINT: /api/admin/pool/ (not /accounts)
+      const response = await fetch(`${API_BASE}/admin/pool/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
-      setAccounts(data);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch accounts: ${response.status}`);
+      }
+      const data = await response.json();
+      // ✅ Ensure data is an array
+      if (Array.isArray(data)) {
+        setAccounts(data);
+      } else {
+        console.warn('Response is not an array:', data);
+        setAccounts([]);
+      }
     } catch (err) {
+      console.error('Error fetching pool accounts:', err);
       addToast('Failed to load accounts', 'error');
+      setAccounts([]); // prevent .map crash
     } finally {
       setLoading(false);
     }
@@ -43,38 +52,39 @@ function AdminPool() {
 
   const handleAddAccount = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem('token');
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/admin/pool/accounts`, {
+      const response = await fetch(`${API_BASE}/admin/pool/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(newAccount)
       });
-      if (res.ok) {
+      if (response.ok) {
         addToast('Account added successfully', 'success');
-        setShowAddModal(false);
-        setFormData({ email: '', access_token: '', refresh_token: '', token_expiry: '' });
+        setShowAdd(false);
+        setNewAccount({ email: '', channel_id: '', proxy: '' });
         fetchAccounts();
       } else {
-        addToast('Failed to add account', 'error');
+        const error = await response.json();
+        addToast(error.detail || 'Failed to add account', 'error');
       }
     } catch (err) {
       addToast('Error adding account', 'error');
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this account?')) return;
+  const handleDeleteAccount = async (accountId) => {
+    if (!confirm('Are you sure you want to delete this account?')) return;
+    const token = localStorage.getItem('token');
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/admin/pool/accounts/${id}`, {
+      const response = await fetch(`${API_BASE}/admin/pool/${accountId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
+      if (response.ok) {
         addToast('Account deleted', 'success');
         fetchAccounts();
       } else {
@@ -85,54 +95,77 @@ function AdminPool() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">YouTube Account Pool</h1>
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold dark:text-white">Admin Pool</h1>
+        <div className="flex gap-2">
           <button
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+            onClick={fetchAccounts}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            title="Refresh"
           >
-            + Add Account
+            <RefreshCw className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            <Plus className="w-4 h-4" /> Add Account
           </button>
         </div>
+      </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+      {/* Loading state */}
+      {loading && (
+        <div className="flex justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && accounts.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center shadow border border-gray-200 dark:border-gray-700">
+          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-600 dark:text-gray-400">No pool accounts yet.</p>
+          <p className="text-sm text-gray-400">Add your first account to start sharing.</p>
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading && accounts.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="p-3 text-left">Email</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left">Subscribes (today)</th>
-                <th className="p-3 text-left">Likes (today)</th>
-                <th className="p-3 text-left">Comments (today)</th>
-                <th className="p-3 text-left">Last Used</th>
-                <th className="p-3 text-left">Actions</th>
+                <th className="p-3 text-left text-gray-700 dark:text-gray-300">Email</th>
+                <th className="p-3 text-left text-gray-700 dark:text-gray-300">Channel ID</th>
+                <th className="p-3 text-left text-gray-700 dark:text-gray-300">Proxy</th>
+                <th className="p-3 text-left text-gray-700 dark:text-gray-300">Status</th>
+                <th className="p-3 text-left text-gray-700 dark:text-gray-300">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {accounts.map(account => (
-                <tr key={account.id} className="border-t border-gray-100 dark:border-gray-700">
-                  <td className="p-3">{account.email}</td>
+              {accounts.map((acc) => (
+                <tr key={acc.id} className="border-t border-gray-100 dark:border-gray-700">
+                  <td className="p-3 dark:text-gray-300">{acc.email}</td>
+                  <td className="p-3 dark:text-gray-300">{acc.channel_id || '-'}</td>
+                  <td className="p-3 dark:text-gray-300">{acc.proxy || '-'}</td>
                   <td className="p-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      account.status === 'active' ? 'bg-green-100 text-green-800' :
-                      account.status === 'suspended' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      acc.status === 'active'
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                     }`}>
-                      {account.status}
+                      {acc.status || 'inactive'}
                     </span>
                   </td>
-                  <td className="p-3">{account.daily_subscribe_count}/75</td>
-                  <td className="p-3">{account.daily_like_count}/200</td>
-                  <td className="p-3">{account.daily_comment_count}/100</td>
-                  <td className="p-3">{account.last_used_at ? new Date(account.last_used_at).toLocaleString() : 'Never'}</td>
                   <td className="p-3">
-                    <button onClick={() => handleDelete(account.id)} className="text-red-500 hover:text-red-700 transition">
-                      Delete
+                    <button
+                      onClick={() => handleDeleteAccount(acc.id)}
+                      className="p-1 text-red-500 hover:text-red-700 transition"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
@@ -140,62 +173,53 @@ function AdminPool() {
             </tbody>
           </table>
         </div>
-      </div>
+      )}
 
-      {/* Add Account Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      {/* Add Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4">Add YouTube Account</h2>
+            <h2 className="text-xl font-bold dark:text-white mb-4">Add Pool Account</h2>
             <form onSubmit={handleAddAccount}>
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Email</label>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Email</label>
                 <input
                   type="email"
-                  className="w-full p-2 border rounded dark:bg-gray-700"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
+                  className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  value={newAccount.email}
+                  onChange={(e) => setNewAccount({ ...newAccount, email: e.target.value })}
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Access Token</label>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Channel ID (optional)</label>
                 <input
                   type="text"
-                  className="w-full p-2 border rounded dark:bg-gray-700"
-                  value={formData.access_token}
-                  onChange={(e) => setFormData({ ...formData, access_token: e.target.value })}
+                  className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  value={newAccount.channel_id}
+                  onChange={(e) => setNewAccount({ ...newAccount, channel_id: e.target.value })}
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Refresh Token</label>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Proxy (optional)</label>
                 <input
                   type="text"
-                  className="w-full p-2 border rounded dark:bg-gray-700"
-                  value={formData.refresh_token}
-                  onChange={(e) => setFormData({ ...formData, refresh_token: e.target.value })}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Token Expiry</label>
-                <input
-                  type="datetime-local"
-                  className="w-full p-2 border rounded dark:bg-gray-700"
-                  value={formData.token_expiry}
-                  onChange={(e) => setFormData({ ...formData, token_expiry: e.target.value })}
+                  className="w-full p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  value={newAccount.proxy}
+                  onChange={(e) => setNewAccount({ ...newAccount, proxy: e.target.value })}
                 />
               </div>
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-2 border rounded hover:bg-gray-50 transition"
+                  onClick={() => setShowAdd(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                 >
                   Add Account
                 </button>

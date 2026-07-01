@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Globe, MapPin, Calendar, TrendingUp, PlayCircle, CheckCircle, XCircle } from 'lucide-react';
+import { User, Mail, Globe, MapPin, Calendar, TrendingUp, PlayCircle, CheckCircle, XCircle, Copy, Share2, Users, Award } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import Avatar from '../components/Avatar';
 
@@ -15,6 +15,7 @@ function Profile() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [formData, setFormData] = useState({ bio: '', website: '', location: '' });
+  const [referral, setReferral] = useState(null);
   const { addToast } = useToast();
   const navigate = useNavigate();
 
@@ -30,6 +31,7 @@ function Profile() {
     fetchProfile();
     fetchActivities();
     fetchCampaigns();
+    fetchReferral();
   }, []);
 
   const fetchProfile = async () => {
@@ -78,6 +80,21 @@ function Profile() {
     }
   };
 
+  const fetchReferral = async () => {
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/referral/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReferral(data);
+      }
+    } catch (err) {
+      console.error('Failed to load referral', err);
+    }
+  };
+
   const updateProfile = async (e) => {
     e.preventDefault();
     try {
@@ -107,11 +124,9 @@ function Profile() {
       addToast('Please select an image first', 'warning');
       return;
     }
-
     setUploadingAvatar(true);
     const formData = new FormData();
     formData.append('avatar', avatarFile);
-
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE}/users/avatar`, {
@@ -124,7 +139,6 @@ function Profile() {
         setProfile({ ...profile, avatar_url: data.avatar_url });
         addToast('Avatar updated successfully', 'success');
         setAvatarFile(null);
-        // Refresh profile to get updated data
         fetchProfile();
       } else {
         addToast(data.detail || 'Failed to upload avatar', 'error');
@@ -133,6 +147,13 @@ function Profile() {
       addToast('Error uploading avatar', 'error');
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  const copyReferralLink = () => {
+    if (referral?.link) {
+      navigator.clipboard.writeText(referral.link);
+      addToast('Referral link copied!', 'success');
     }
   };
 
@@ -151,7 +172,6 @@ function Profile() {
         {/* Profile Header */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-6">
           <div className="flex flex-col md:flex-row items-start gap-6">
-            {/* Avatar Section with Upload */}
             <div className="flex flex-col items-center gap-2">
               <Avatar user={profile} size="xl" className="border-4 border-blue-500" />
               <div className="flex flex-col items-center gap-1">
@@ -230,6 +250,51 @@ function Profile() {
             </form>
           )}
         </div>
+
+        {/* Referral Section */}
+        {referral && (
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-6 mb-6 border border-blue-200 dark:border-blue-800">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  Referral Program
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Share your code and earn rewards when friends sign up!
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono text-sm">
+                  {referral.code}
+                </div>
+                <button
+                  onClick={copyReferralLink}
+                  className="p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition"
+                  title="Copy referral link"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (referral?.link) {
+                      window.open(referral.link, '_blank');
+                    }
+                  }}
+                  className="p-2 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition"
+                  title="Share referral link"
+                >
+                  <Share2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4 mt-3 text-sm text-gray-600 dark:text-gray-300">
+              <span className="flex items-center gap-1"><Users className="w-4 h-4" /> Total Referrals: {referral.total_referrals}</span>
+              <span className="flex items-center gap-1"><Award className="w-4 h-4 text-yellow-500" /> Completed: {referral.completed_referrals}</span>
+              <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4 text-green-500" /> Rewards Earned: {referral.rewards_earned}</span>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
