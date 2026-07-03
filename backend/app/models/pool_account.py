@@ -2,17 +2,12 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Foreign
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
-from app.database import Base  # Change this to your actual database import
+from app.database import Base
 import uuid
-
-# If ActionJob and ActionLog are defined in other files, import them here
-# to ensure they're registered before defining relationships
-# from app.models.action_job import ActionJob
-# from app.models.action_log import ActionLog
-
 
 class PoolAccount(Base):
     __tablename__ = "pool_accounts"
+    __table_args__ = {'extend_existing': True}   # ✅ Already added – prevents duplicate table definition errors
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), nullable=False)
@@ -32,15 +27,14 @@ class PoolAccount(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 
-    # Relationships - using string references with full module paths
-    # This avoids circular import issues
+    # Relationships
     action_jobs = relationship(
-        "app.models.action_job.ActionJob", 
+        "app.models.action_job.ActionJob",
         back_populates="account",
         lazy="select"
     )
     action_logs = relationship(
-        "app.models.action_log.ActionLog", 
+        "app.models.action_log.ActionLog",
         back_populates="account",
         lazy="select"
     )
