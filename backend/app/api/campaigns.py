@@ -38,6 +38,93 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+# ===== REUSABLE CAMPAIGN EXECUTION LOGIC (for scheduler) =====
+def _run_campaign_logic(campaign_id: int, db: Session):
+    """
+    Executes a campaign by its ID. Used by the scheduler and background tasks.
+    Returns a dict with campaign_id, status, completed, target.
+    """
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        return {"error": "Campaign not found", "campaign_id": campaign_id}
+
+    user = db.query(User).filter(User.id == campaign.user_id).first()
+    if not user:
+        return {"error": "User not found", "campaign_id": campaign_id}
+
+    # If already running or completed, skip
+    if campaign.status in (CampaignStatus.RUNNING, CampaignStatus.COMPLETED):
+        return {
+            "campaign_id": campaign.id,
+            "status": campaign.status.value,
+            "completed": campaign.completed_count,
+            "target": campaign.target_count,
+            "message": "Campaign already processed"
+        }
+
+    try:
+        # Check YouTube connection
+        oauth_token = db.query(OAuthToken).filter(
+            OAuthToken.user_id == user.id,
+            OAuthToken.provider == "google"
+        ).first()
+        if not oauth_token:
+            return {"error": "YouTube not connected", "campaign_id": campaign_id}
+
+        # Select account from pool
+        selector = AccountSelector(db)
+        account = selector.select_account(campaign.action_type)
+        if not account:
+            return {"error": "No available pool accounts", "campaign_id": campaign_id}
+
+        # Execute actions
+        executor = ActionExecutor(db)
+        actions = campaign.target_count
+        success_count = 0
+        for i in range(actions):
+            result = executor.execute_action(
+                account_id=account.id,
+                user_id=user.id,
+                action_type=campaign.action_type.value,
+                target=campaign.video_id,
+                campaign_id=campaign.id,
+                comment_text=campaign.comment_text or None,
+                comment_list=campaign.comment_list.split("\n") if campaign.comment_list else None
+            )
+            if result:
+                success_count += 1
+
+        # Update campaign
+        campaign.completed_count = success_count
+        if success_count >= campaign.target_count:
+            campaign.status = CampaignStatus.COMPLETED
+            add_xp(user, 20, db)
+            update_streak(user, db)
+            if campaign.webhook_url:
+                send_webhook(campaign.webhook_url, {"campaign_id": campaign.id, "status": "completed"})
+            send_campaign_completion_email(user.email, campaign.name)
+            log_activity(db, user.id, "campaign_completed", f"Campaign '{campaign.name}' completed (scheduled)")
+        else:
+            campaign.status = CampaignStatus.FAILED
+            log_activity(db, user.id, "campaign_failed", f"Campaign '{campaign.name}' failed (only {success_count}/{campaign.target_count} actions)")
+
+        db.commit()
+        return {
+            "campaign_id": campaign.id,
+            "status": campaign.status.value,
+            "completed": success_count,
+            "target": campaign.target_count
+        }
+
+    except Exception as e:
+        campaign.status = CampaignStatus.FAILED
+        campaign.error_message = str(e)
+        db.commit()
+        return {"error": str(e), "campaign_id": campaign_id}
+
+
+# ===== ROUTES =====
+
 @router.get("/")
 def list_campaigns(
     credentials: HTTPAuthorizationCredentials = Depends(security),
