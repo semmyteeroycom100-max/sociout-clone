@@ -24,6 +24,7 @@ class CampaignCreate(BaseModel):
     comment_text: Optional[str] = None
     comment_list: Optional[List[str]] = None
     scheduled_at: Optional[datetime] = None
+    platform: Optional[str] = "youtube"          # <-- ADDED
 
     @field_validator('video_url')
     def validate_youtube_url(cls, v):
