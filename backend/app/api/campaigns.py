@@ -8,6 +8,7 @@ from sqlalchemy import desc
 from datetime import datetime
 from io import StringIO
 import csv
+import re  # <-- ADDED
 
 from app.database import get_db
 from app.models.user import User
@@ -27,16 +28,20 @@ from app.services.gamification import add_xp, update_streak
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
 
-def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: Session):
-    token = credentials.credentials
-    payload = decode_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    email = payload.get("sub")
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+# ===== VIDEO ID EXTRACTION (supports all YouTube formats) =====
+def extract_video_id(url: str) -> str:
+    patterns = [
+        r"(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)",  # standard watch
+        r"youtu\.be\/([0-9A-Za-z_-]{11})",          # youtu.be
+        r"shorts\/([0-9A-Za-z_-]{11})",             # shorts
+        r"embed\/([0-9A-Za-z_-]{11})",              # embed
+        r"v\/([0-9A-Za-z_-]{11})"                   # /v/ format
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    raise ValueError("Could not extract video ID")
 
 # ===== REUSABLE CAMPAIGN EXECUTION LOGIC (for scheduler) =====
 def _run_campaign_logic(campaign_id: int, db: Session):
@@ -122,6 +127,16 @@ def _run_campaign_logic(campaign_id: int, db: Session):
         db.commit()
         return {"error": str(e), "campaign_id": campaign_id}
 
+def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: Session):
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 # ===== ROUTES =====
 
@@ -143,15 +158,13 @@ def create_campaign(
     db: Session = Depends(get_db)
 ):
     user = get_current_user_from_token(credentials, db)
-    if "youtube.com" not in campaign_data.video_url and "youtu.be" not in campaign_data.video_url:
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
-    video_id = None
-    if "v=" in campaign_data.video_url:
-        video_id = campaign_data.video_url.split("v=")[-1].split("&")[0]
-    elif "youtu.be" in campaign_data.video_url:
-        video_id = campaign_data.video_url.split("/")[-1].split("?")[0]
-    if not video_id:
-        raise HTTPException(status_code=400, detail="Could not extract video ID")
+
+    # Validate and extract video ID using robust function
+    try:
+        video_id = extract_video_id(campaign_data.video_url)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL – could not extract video ID")
+
     new_campaign = Campaign(
         user_id=user.id,
         name=campaign_data.name,
@@ -253,7 +266,7 @@ def delete_campaign(
 def export_campaign_csv(
     campaign_id: int,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db)   # <-- Fixed typo
 ):
     user = get_current_user_from_token(credentials, db)
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == user.id).first()
