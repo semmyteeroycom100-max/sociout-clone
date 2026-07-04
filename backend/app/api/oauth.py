@@ -5,10 +5,14 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import os
 import httpx
+import uuid
 
 from app.database import get_db
 from app.models.user import User
-from app.models.oauth import OAuthToken          # <-- fixed import
+from app.models.oauth import OAuthToken
+from app.models.pool_account import PoolAccount
+from app.services.account_encryption import encrypt_token
+from app.services.youtube import YouTubeService
 from app.core.auth import create_access_token, decode_access_token
 from app.core.oauth_config import oauth
 
@@ -80,6 +84,9 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
         db.add(oauth_token)
         db.commit()
         
+        # ===== AUTO-ADD TO POOL =====
+        await _create_pool_account_from_oauth(user, oauth_token, db)
+        
         jwt_token = create_access_token(data={"sub": user.email})
         
         # Redirect back to frontend dashboard with token
@@ -88,6 +95,60 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"OAuth failed: {str(e)}")
+
+
+async def _create_pool_account_from_oauth(user: User, oauth_token: OAuthToken, db: Session):
+    """
+    Helper to create a pool account from the user's OAuth token.
+    This runs silently – failures are logged but don't break the OAuth flow.
+    """
+    try:
+        # Get channel ID from YouTube API
+        channel_id = None
+        try:
+            from google.oauth2.credentials import Credentials
+            from googleapiclient.discovery import build
+            creds = Credentials(
+                token=oauth_token.access_token,
+                refresh_token=oauth_token.refresh_token,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=os.getenv("GOOGLE_CLIENT_ID"),
+                client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+                scopes=["https://www.googleapis.com/auth/youtube.readonly"]
+            )
+            youtube = build("youtube", "v3", credentials=creds)
+            channel_response = youtube.channels().list(part="id", mine=True).execute()
+            if channel_response.get("items"):
+                channel_id = channel_response["items"][0]["id"]
+        except Exception as api_error:
+            # If channel fetch fails, we'll store without channel_id (fallback)
+            print(f"Could not fetch channel ID: {api_error}")
+
+        # Check if this account already exists in the pool (by email or channel_id)
+        existing = db.query(PoolAccount).filter(
+            (PoolAccount.email == user.email) |
+            (PoolAccount.channel_id == channel_id)
+        ).first()
+        if existing:
+            return
+
+        # Create pool account
+        pool_acc = PoolAccount(
+            id=uuid.uuid4(),
+            email=user.email,
+            channel_id=channel_id,
+            access_token=encrypt_token(oauth_token.access_token) if oauth_token.access_token else None,
+            refresh_token=encrypt_token(oauth_token.refresh_token) if oauth_token.refresh_token else None,
+            token_expiry=oauth_token.expires_at,
+            status="active",
+            is_user_owned=True
+        )
+        db.add(pool_acc)
+        db.commit()
+        print(f"✅ Pool account created for {user.email}")
+    except Exception as e:
+        # Log but don't raise – we don't want to break the OAuth flow
+        print(f"❌ Failed to create pool account for {user.email}: {e}")
 
 
 @router.get("/youtube/status")
@@ -135,6 +196,12 @@ async def reset_youtube_connection(
     # Delete the OAuth token
     deleted = db.query(OAuthToken).filter(OAuthToken.user_id == user.id).delete()
     db.commit()
+    
+    # Also delete the pool account (if it exists) to avoid stale entries
+    pool_account = db.query(PoolAccount).filter(PoolAccount.email == user.email).first()
+    if pool_account:
+        db.delete(pool_account)
+        db.commit()
     
     return {"message": "YouTube connection reset", "deleted": deleted}
 

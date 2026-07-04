@@ -1,16 +1,18 @@
 from sqlalchemy.orm import Session
 from app.models.pool_account import PoolAccount
-from datetime import datetime, date
+from app.models.action_log import ActionLog  # ADDED
+from datetime import datetime, date, timedelta  # ADDED timedelta
 import random
 
 class AccountSelector:
     def __init__(self, db: Session):
         self.db = db
 
-    def select_account(self, action_type: str):
+    def select_account(self, action_type: str, target_channel_id: str = None):
         """
         Select the best available account for the given action type.
-        Uses round‑robin with quota and cooldown awareness.
+        If action_type is 'subscribe' and target_channel_id is provided,
+        exclude accounts that have already subscribed to that channel.
         """
         now = datetime.utcnow()
         today = date.today()
@@ -34,6 +36,17 @@ class AccountSelector:
             query = query.filter(
                 (PoolAccount.last_reset_date < today) | (PoolAccount.daily_comment_count < 100)
             )
+
+        # For subscribe campaigns, exclude accounts that already subscribed to the target channel
+        if action_type == 'subscribe' and target_channel_id:
+            # Get IDs of accounts that already subscribed to this channel
+            subscribed_account_ids = self.db.query(ActionLog.account_id).filter(
+                ActionLog.action_type == 'SUBSCRIBE',
+                ActionLog.target == target_channel_id,
+                ActionLog.success == True
+            ).distinct().subquery()
+
+            query = query.filter(PoolAccount.id.notin_(subscribed_account_ids))
 
         # Order by last_used_at (round‑robin) and limit to 1
         account = query.order_by(PoolAccount.last_used_at.asc()).first()

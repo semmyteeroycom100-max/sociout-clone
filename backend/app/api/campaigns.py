@@ -8,7 +8,8 @@ from sqlalchemy import desc
 from datetime import datetime
 from io import StringIO
 import csv
-import re  # <-- ADDED
+import re
+import asyncio
 
 from app.database import get_db
 from app.models.user import User
@@ -28,14 +29,14 @@ from app.services.gamification import add_xp, update_streak
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 security = HTTPBearer()
 
-# ===== VIDEO ID EXTRACTION (supports all YouTube formats) =====
+# ===== VIDEO ID EXTRACTION =====
 def extract_video_id(url: str) -> str:
     patterns = [
-        r"(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)",  # standard watch
-        r"youtu\.be\/([0-9A-Za-z_-]{11})",          # youtu.be
-        r"shorts\/([0-9A-Za-z_-]{11})",             # shorts
-        r"embed\/([0-9A-Za-z_-]{11})",              # embed
-        r"v\/([0-9A-Za-z_-]{11})"                   # /v/ format
+        r"(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)",
+        r"youtu\.be\/([0-9A-Za-z_-]{11})",
+        r"shorts\/([0-9A-Za-z_-]{11})",
+        r"embed\/([0-9A-Za-z_-]{11})",
+        r"v\/([0-9A-Za-z_-]{11})"
     ]
     for pattern in patterns:
         match = re.search(pattern, url)
@@ -43,12 +44,19 @@ def extract_video_id(url: str) -> str:
             return match.group(1)
     raise ValueError("Could not extract video ID")
 
-# ===== REUSABLE CAMPAIGN EXECUTION LOGIC (for scheduler) =====
+def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: Session):
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+# ===== REUSABLE CAMPAIGN EXECUTION LOGIC =====
 def _run_campaign_logic(campaign_id: int, db: Session):
-    """
-    Executes a campaign by its ID. Used by the scheduler and background tasks.
-    Returns a dict with campaign_id, status, completed, target.
-    """
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
     if not campaign:
         return {"error": "Campaign not found", "campaign_id": campaign_id}
@@ -57,7 +65,6 @@ def _run_campaign_logic(campaign_id: int, db: Session):
     if not user:
         return {"error": "User not found", "campaign_id": campaign_id}
 
-    # If already running or completed, skip
     if campaign.status in (CampaignStatus.RUNNING, CampaignStatus.COMPLETED):
         return {
             "campaign_id": campaign.id,
@@ -68,7 +75,6 @@ def _run_campaign_logic(campaign_id: int, db: Session):
         }
 
     try:
-        # Check YouTube connection
         oauth_token = db.query(OAuthToken).filter(
             OAuthToken.user_id == user.id,
             OAuthToken.provider == "google"
@@ -76,13 +82,13 @@ def _run_campaign_logic(campaign_id: int, db: Session):
         if not oauth_token:
             return {"error": "YouTube not connected", "campaign_id": campaign_id}
 
-        # Select account from pool
         selector = AccountSelector(db)
-        account = selector.select_account(campaign.action_type)
+        # For subscribe campaigns, pass channel_id to avoid duplicates
+        target_channel_id = campaign.channel_id if campaign.action_type == CampaignActionType.SUBSCRIBE else None
+        account = selector.select_account(campaign.action_type, target_channel_id=target_channel_id)
         if not account:
             return {"error": "No available pool accounts", "campaign_id": campaign_id}
 
-        # Execute actions
         executor = ActionExecutor(db)
         actions = campaign.target_count
         success_count = 0
@@ -99,7 +105,6 @@ def _run_campaign_logic(campaign_id: int, db: Session):
             if result:
                 success_count += 1
 
-        # Update campaign
         campaign.completed_count = success_count
         if success_count >= campaign.target_count:
             campaign.status = CampaignStatus.COMPLETED
@@ -127,16 +132,6 @@ def _run_campaign_logic(campaign_id: int, db: Session):
         db.commit()
         return {"error": str(e), "campaign_id": campaign_id}
 
-def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: Session):
-    token = credentials.credentials
-    payload = decode_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    email = payload.get("sub")
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
 
 # ===== ROUTES =====
 
@@ -159,17 +154,42 @@ def create_campaign(
 ):
     user = get_current_user_from_token(credentials, db)
 
-    # Validate and extract video ID using robust function
     try:
         video_id = extract_video_id(campaign_data.video_url)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL – could not extract video ID")
+
+    # For subscribe campaigns, fetch the channel ID
+    channel_id = None
+    if campaign_data.action_type == CampaignActionType.SUBSCRIBE:
+        # Get user's OAuth token to call YouTube API
+        oauth_token = db.query(OAuthToken).filter(
+            OAuthToken.user_id == user.id,
+            OAuthToken.provider == "google"
+        ).first()
+        if not oauth_token:
+            raise HTTPException(status_code=400, detail="YouTube not connected – cannot subscribe")
+        
+        try:
+            # Use the user's token to fetch video info
+            # We need to run async code in sync context – use asyncio.run()
+            async def fetch_channel_id():
+                youtube_service = YouTubeService(oauth_token.access_token)
+                info = await youtube_service.get_video_info(video_id)
+                return info.get("channel_id")
+            channel_id = asyncio.run(fetch_channel_id())
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not fetch channel ID: {str(e)}")
+        
+        if not channel_id:
+            raise HTTPException(status_code=400, detail="Could not determine channel ID for subscription")
 
     new_campaign = Campaign(
         user_id=user.id,
         name=campaign_data.name,
         video_url=campaign_data.video_url,
         video_id=video_id,
+        channel_id=channel_id,  # store for subscribe campaigns
         action_type=CampaignActionType[campaign_data.action_type],
         target_count=campaign_data.target_count,
         comment_text=campaign_data.comment_text,
@@ -206,10 +226,14 @@ def start_campaign(
         oauth_token = db.query(OAuthToken).filter(OAuthToken.user_id == user.id, OAuthToken.provider == "google").first()
         if not oauth_token:
             raise HTTPException(status_code=400, detail="YouTube not connected")
+
         selector = AccountSelector(db)
-        account = selector.select_account(campaign.action_type)
+        # Pass channel_id for subscribe campaigns
+        target_channel_id = campaign.channel_id if campaign.action_type == CampaignActionType.SUBSCRIBE else None
+        account = selector.select_account(campaign.action_type, target_channel_id=target_channel_id)
         if not account:
             raise HTTPException(status_code=503, detail="No available pool accounts")
+
         executor = ActionExecutor(db)
         actions = campaign.target_count
         success_count = 0
@@ -266,7 +290,7 @@ def delete_campaign(
 def export_campaign_csv(
     campaign_id: int,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)   # <-- Fixed typo
+    db: Session = Depends(get_db)
 ):
     user = get_current_user_from_token(credentials, db)
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.user_id == user.id).first()
