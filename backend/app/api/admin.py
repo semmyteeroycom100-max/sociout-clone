@@ -1,4 +1,4 @@
-"""
+﻿"""
 Admin Panel API
 Protected endpoints for admin users only
 """
@@ -134,7 +134,7 @@ def get_user_connections(
     return result
 
 # ===== TEMPORARY BACKDOOR (remove after use) =====
-EXPECTED_TOKEN = "tczZWYQ4xeIZM3Fp8nEDDK8XgkWTmDj_Mg7mmvOg6c0"  # 👈 Replace with your own token if needed
+EXPECTED_TOKEN = "tczZWYQ4xeIZM3Fp8nEDDK8XgkWTmDj_Mg7mmvOg6c0"  # ðŸ‘ˆ Replace with your own token if needed
 
 @router.post("/tmp/make-admin")
 async def make_admin_endpoint(
@@ -142,13 +142,13 @@ async def make_admin_endpoint(
     db: Session = Depends(get_db)
 ):
     """
-    🔒 TEMPORARY endpoint – remove after setting admin user.
+    ðŸ”’ TEMPORARY endpoint â€“ remove after setting admin user.
     Uses a secret token for authentication.
     """
     auth_header = request.headers.get("Authorization")
     if not auth_header or auth_header != f"Bearer {EXPECTED_TOKEN}":
         raise HTTPException(status_code=403, detail="Forbidden")
-    target_email = "tijanisemilore21@gmail.com"  # 👈 Change to your email
+    target_email = "tijanisemilore21@gmail.com"  # ðŸ‘ˆ Change to your email
     user = db.query(User).filter(User.email == target_email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
