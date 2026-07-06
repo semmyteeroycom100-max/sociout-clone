@@ -12,6 +12,7 @@ class User(Base):
     hashed_password = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
+    is_super_admin = Column(Boolean, default=False)   
     reset_token = Column(String, nullable=True)
     reset_token_expires = Column(DateTime, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -32,6 +33,10 @@ class User(Base):
     streak_days = Column(Integer, default=0)
     last_active = Column(DateTime(timezone=True), nullable=True)
 
+    # 2FA fields
+    twofa_secret = Column(String, nullable=True)            # NEW
+    twofa_enabled = Column(Boolean, default=False)          # NEW
+
     # ===== REFERRAL FIELDS (NEW) =====
     referral_code = Column(String(50), unique=True, index=True, nullable=True)
     referred_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -50,6 +55,8 @@ class User(Base):
     # Referral relationships
     referrals_made = relationship("Referral", foreign_keys="[Referral.referrer_id]", back_populates="referrer")
     referrals_received = relationship("Referral", foreign_keys="[Referral.referred_id]", back_populates="referred")
+    badges = relationship("UserBadge", back_populates="user")
+    wallet_audits = relationship("WalletAudit", back_populates="user")
 
     def __repr__(self):
         return f"<User {self.username}>"

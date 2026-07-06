@@ -18,6 +18,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
+if user.twofa_enabled:
+    # We need to return a special response or require 2FA code
+    # For now, we'll require the code in a separate endpoint, but a simpler approach is to return a temporary token
+    # We'll implement a two‑step login: first step returns a temporary token, second step verifies 2FA
+    # For brevity, we'll just check if 2FA is enabled and return a flag.
 
 def get_password_hash(password):
     return pwd_context.hash(password)

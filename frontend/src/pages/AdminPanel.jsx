@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, Users, FileText, MessageSquare, Shield, Database, 
-  Plus, Edit, Trash2, Search, ChevronDown, ChevronUp, 
-  Eye, CheckCircle, XCircle, AlertCircle, X
+import {
+  LayoutDashboard, Users, FileText, MessageSquare, Shield, Database,
+  Plus, Edit, Trash2, Search, ChevronDown, ChevronUp,
+  Eye, CheckCircle, XCircle, AlertCircle, X, Key, Wallet, Server
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import ArticleEditor from '../components/ArticleEditor';
@@ -23,8 +23,105 @@ function AdminPanel() {
   const [showArticleModal, setShowArticleModal] = useState(false);
   const [editingArticle, setEditingArticle] = useState(null);
   const [articleForm, setArticleForm] = useState({ title: '', slug: '', content: '', module: 'platform', order: 0, status: 'draft' });
+
+  // ----- Bulk actions state -----
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectAllUsers, setSelectAllUsers] = useState(false);
+
+  // ----- 2FA state -----
+  const [twofaSecret, setTwofaSecret] = useState('');
+  const [twofaQR, setTwofaQR] = useState('');
+  const [twofaCode, setTwofaCode] = useState('');
+  const [twofaEnabled, setTwofaEnabled] = useState(false);
+  const [twofaSetupStep, setTwofaSetupStep] = useState('idle');
+
+  // ----- Wallet state -----
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [walletAmount, setWalletAmount] = useState('');
+  const [walletReason, setWalletReason] = useState('');
+
   const { addToast } = useToast();
   const navigate = useNavigate();
+
+  // ----- Bulk action functions -----
+  const toggleUserSelection = (userId) => {
+    setSelectedUsers(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const toggleSelectAllUsers = () => {
+    if (selectAllUsers) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(users.map(u => u.id));
+    }
+    setSelectAllUsers(!selectAllUsers);
+  };
+
+  const handleBulkDeleteUsers = async () => {
+    if (!selectedUsers.length) return;
+    if (!confirm(`Delete ${selectedUsers.length} user(s)? This action is permanent.`)) return;
+    const token = localStorage.getItem('token');
+    const promises = selectedUsers.map(id =>
+      fetch(`${API_BASE}/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    );
+    try {
+      await Promise.all(promises);
+      addToast(`${selectedUsers.length} user(s) deleted.`, 'success');
+      setSelectedUsers([]);
+      setSelectAllUsers(false);
+      loadData();
+    } catch (err) {
+      addToast('Error deleting users', 'error');
+    }
+  };
+
+  const handleBulkPromoteUsers = async () => {
+    if (!selectedUsers.length) return;
+    if (!confirm(`Promote ${selectedUsers.length} user(s) to admin?`)) return;
+    const token = localStorage.getItem('token');
+    const promises = selectedUsers.map(id =>
+      fetch(`${API_BASE}/admin/users/${id}/role`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    );
+    try {
+      await Promise.all(promises);
+      addToast(`${selectedUsers.length} user(s) promoted.`, 'success');
+      setSelectedUsers([]);
+      setSelectAllUsers(false);
+      loadData();
+    } catch (err) {
+      addToast('Error promoting users', 'error');
+    }
+  };
+
+  const handleBulkDemoteUsers = async () => {
+    if (!selectedUsers.length) return;
+    if (!confirm(`Demote ${selectedUsers.length} user(s) from admin?`)) return;
+    const token = localStorage.getItem('token');
+    const promises = selectedUsers.map(id =>
+      fetch(`${API_BASE}/admin/users/${id}/role`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    );
+    try {
+      await Promise.all(promises);
+      addToast(`${selectedUsers.length} user(s) demoted.`, 'success');
+      setSelectedUsers([]);
+      setSelectAllUsers(false);
+      loadData();
+    } catch (err) {
+      addToast('Error demoting users', 'error');
+    }
+  };
 
   // Auth check
   useEffect(() => {
@@ -34,6 +131,7 @@ function AdminPanel() {
       return;
     }
     loadData();
+    checkTwoFAStatus();
   }, [activeTab]);
 
   const loadData = async () => {
@@ -42,7 +140,6 @@ function AdminPanel() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Load stats
       const statsRes = await fetch(`${API_BASE}/admin/stats`, { headers });
       if (statsRes.status === 403) {
         addToast('Admin access required', 'error');
@@ -54,23 +151,24 @@ function AdminPanel() {
         setStats(statsData);
       }
 
-      // Load campaigns
       const campaignsRes = await fetch(`${API_BASE}/admin/all-campaigns`, { headers });
       if (campaignsRes.ok) {
         const campaignsData = await campaignsRes.json();
         setCampaigns(campaignsData);
       }
 
-      // Load users
-      if (activeTab === 'users' || activeTab === 'overview') {
+      // Load users for Users, Overview, and Wallet tabs
+      if (activeTab === 'users' || activeTab === 'overview' || activeTab === 'wallet') {
         const usersRes = await fetch(`${API_BASE}/admin/users`, { headers });
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           setUsers(usersData);
+          // Reset selection if users list changes
+          setSelectedUsers([]);
+          setSelectAllUsers(false);
         }
       }
 
-      // Load articles
       if (activeTab === 'articles') {
         const articlesRes = await fetch(`${API_BASE}/articles/`, { headers });
         if (articlesRes.ok) {
@@ -79,7 +177,6 @@ function AdminPanel() {
         }
       }
 
-      // Load feedback
       if (activeTab === 'feedback') {
         const feedbackRes = await fetch(`${API_BASE}/feedback/`, { headers });
         if (feedbackRes.ok) {
@@ -88,7 +185,6 @@ function AdminPanel() {
         }
       }
 
-      // Load audit
       if (activeTab === 'audit') {
         const auditRes = await fetch(`${API_BASE}/admin/audit/`, { headers });
         if (auditRes.ok) {
@@ -105,12 +201,141 @@ function AdminPanel() {
     }
   };
 
+  // ----- 2FA functions -----
+  const checkTwoFAStatus = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/users/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTwofaEnabled(data.twofa_enabled || false);
+        if (data.twofa_enabled) {
+          setTwofaSetupStep('idle');
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch 2FA status');
+    }
+  };
+
+  const handleSetupTwoFA = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/admin/security/2fa/setup`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTwofaSecret(data.secret);
+        setTwofaQR(data.qr_code);
+        setTwofaSetupStep('verify');
+        addToast('Scan the QR code with Google Authenticator', 'success');
+      } else {
+        addToast('Failed to setup 2FA', 'error');
+      }
+    } catch (e) {
+      addToast('Error setting up 2FA', 'error');
+    }
+  };
+
+  const handleVerifyTwoFA = async () => {
+    if (!twofaCode || twofaCode.length !== 6) {
+      addToast('Please enter a valid 6-digit code', 'warning');
+      return;
+    }
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/admin/security/2fa/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ token: twofaCode })
+      });
+      if (res.ok) {
+        addToast('2FA enabled successfully!', 'success');
+        setTwofaEnabled(true);
+        setTwofaSetupStep('idle');
+        setTwofaCode('');
+        setTwofaQR('');
+        setTwofaSecret('');
+      } else {
+        addToast('Invalid code, please try again', 'error');
+      }
+    } catch (e) {
+      addToast('Error verifying 2FA', 'error');
+    }
+  };
+
+  const handleDisableTwoFA = async () => {
+    if (!confirm('Are you sure you want to disable 2FA? This reduces your account security.')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/admin/security/2fa/disable`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        addToast('2FA disabled', 'success');
+        setTwofaEnabled(false);
+        setTwofaSetupStep('idle');
+      } else {
+        addToast('Failed to disable 2FA', 'error');
+      }
+    } catch (e) {
+      addToast('Error disabling 2FA', 'error');
+    }
+  };
+
+  // ----- Wallet functions -----
+  const handleAdjustWallet = async () => {
+    const amount = parseInt(walletAmount);
+    if (isNaN(amount) || amount === 0) {
+      addToast('Please enter a valid non‑zero amount', 'warning');
+      return;
+    }
+    if (!walletReason.trim()) {
+      addToast('Please enter a reason for the adjustment', 'warning');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/admin/wallet/${selectedUser.id}/adjust`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount, reason: walletReason.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        addToast(`Balance updated to ${data.new_balance} credits`, 'success');
+        setShowWalletModal(false);
+        setSelectedUser(null);
+        setWalletAmount('');
+        setWalletReason('');
+        loadData(); // refresh user list
+      } else {
+        const err = await res.json();
+        addToast(err.detail || 'Failed to adjust wallet', 'error');
+      }
+    } catch (err) {
+      addToast('Network error', 'error');
+    }
+  };
+
   // ---- Article CRUD ----
   const handleSaveArticle = async () => {
     const token = localStorage.getItem('token');
     const method = editingArticle ? 'PUT' : 'POST';
-    const url = editingArticle 
-      ? `${API_BASE}/articles/${editingArticle.id}` 
+    const url = editingArticle
+      ? `${API_BASE}/articles/${editingArticle.id}`
       : `${API_BASE}/articles/`;
 
     try {
@@ -169,7 +394,7 @@ function AdminPanel() {
     setShowArticleModal(true);
   };
 
-  const handleToggleAdmin = async (userId, currentAdmin) => {
+  const handleToggleAdmin = async (userId) => {
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
@@ -217,9 +442,13 @@ function AdminPanel() {
     { id: 'articles', label: 'Articles', icon: FileText },
     { id: 'feedback', label: 'Feedback', icon: MessageSquare },
     { id: 'audit', label: 'Audit', icon: Shield },
+    { id: 'security', label: 'Security', icon: Key },
+    { id: 'wallet', label: 'Wallet', icon: Wallet },
+    { id: 'system', label: 'System', icon: Server },
     { id: 'pool', label: 'Pool', icon: Database, external: true, path: '/admin/pool' },
   ];
 
+  // ----- Render functions -----
   const renderOverview = () => {
     const completedCampaigns = campaigns.filter(c => c.status === 'completed').length;
     const failedCampaigns = campaigns.filter(c => c.status === 'failed').length;
@@ -255,7 +484,6 @@ function AdminPanel() {
           </div>
         </div>
 
-        {/* Campaigns Table */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
           <h2 className="text-xl font-bold mb-4 dark:text-white">Recent Campaigns</h2>
           <div className="overflow-x-auto">
@@ -276,12 +504,11 @@ function AdminPanel() {
                     <td className="p-2 dark:text-gray-300">{camp.user_id}</td>
                     <td className="p-2 dark:text-gray-300">{camp.action_type}</td>
                     <td className="p-2">
-                      <span className={`px-2 py-0.5 rounded text-xs ${
-                        camp.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
+                      <span className={`px-2 py-0.5 rounded text-xs ${camp.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
                         camp.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
-                        camp.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
-                        'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                      }`}>
+                          camp.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
                         {camp.status}
                       </span>
                     </td>
@@ -297,10 +524,19 @@ function AdminPanel() {
   };
 
   const renderUsers = () => {
-    const filteredUsers = users.filter(u => 
+    const filteredUsers = users.filter(u =>
       u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.username?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Update select all state when filtered list changes
+    useEffect(() => {
+      if (filteredUsers.length && selectedUsers.length === filteredUsers.length) {
+        setSelectAllUsers(true);
+      } else {
+        setSelectAllUsers(false);
+      }
+    }, [filteredUsers, selectedUsers]);
 
     return (
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
@@ -317,10 +553,49 @@ function AdminPanel() {
             />
           </div>
         </div>
+        {selectedUsers.length > 0 && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {selectedUsers.length} selected
+            </span>
+            <button
+              onClick={handleBulkDeleteUsers}
+              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition"
+            >
+              Delete
+            </button>
+            <button
+              onClick={handleBulkPromoteUsers}
+              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition"
+            >
+              Promote to Admin
+            </button>
+            <button
+              onClick={handleBulkDemoteUsers}
+              className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 transition"
+            >
+              Demote
+            </button>
+            <button
+              onClick={() => { setSelectedUsers([]); setSelectAllUsers(false); }}
+              className="px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white text-sm rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition"
+            >
+              Clear
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-100 dark:bg-gray-700">
               <tr>
+                <th className="p-2 text-left">
+                  <input
+                    type="checkbox"
+                    checked={selectAllUsers}
+                    onChange={toggleSelectAllUsers}
+                    disabled={filteredUsers.length === 0}
+                  />
+                </th>
                 <th className="p-2 text-left dark:text-white">ID</th>
                 <th className="p-2 text-left dark:text-white">Email</th>
                 <th className="p-2 text-left dark:text-white">Username</th>
@@ -331,6 +606,13 @@ function AdminPanel() {
             <tbody>
               {filteredUsers.map(user => (
                 <tr key={user.id} className="border-t dark:border-gray-700">
+                  <td className="p-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.includes(user.id)}
+                      onChange={() => toggleUserSelection(user.id)}
+                    />
+                  </td>
                   <td className="p-2 dark:text-gray-300">{user.id}</td>
                   <td className="p-2 dark:text-gray-300">{user.email}</td>
                   <td className="p-2 dark:text-gray-300">{user.username}</td>
@@ -343,7 +625,7 @@ function AdminPanel() {
                   </td>
                   <td className="p-2">
                     <button
-                      onClick={() => handleToggleAdmin(user.id, user.is_admin)}
+                      onClick={() => handleToggleAdmin(user.id)}
                       className="text-sm px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
                     >
                       {user.is_admin ? 'Demote' : 'Promote'}
@@ -359,7 +641,7 @@ function AdminPanel() {
   };
 
   const renderArticles = () => {
-    const filteredArticles = articles.filter(a => 
+    const filteredArticles = articles.filter(a =>
       a.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.module?.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -407,11 +689,10 @@ function AdminPanel() {
                   <td className="p-2 dark:text-gray-300">{article.title}</td>
                   <td className="p-2 dark:text-gray-300">{article.module}</td>
                   <td className="p-2">
-                    <span className={`px-2 py-0.5 rounded text-xs ${
-                      article.status === 'published' 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
-                        : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-xs ${article.status === 'published'
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                      : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                      }`}>
                       {article.status}
                     </span>
                   </td>
@@ -465,12 +746,11 @@ function AdminPanel() {
                 <tr key={fb.id} className="border-t dark:border-gray-700">
                   <td className="p-2 dark:text-gray-300">{fb.user_id || 'Anonymous'}</td>
                   <td className="p-2">
-                    <span className={`px-2 py-0.5 rounded text-xs ${
-                      fb.type === 'bug' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                    <span className={`px-2 py-0.5 rounded text-xs ${fb.type === 'bug' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
                       fb.type === 'feature' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' :
-                      fb.type === 'praise' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300' :
-                      'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                    }`}>
+                        fb.type === 'praise' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300' :
+                          'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                      }`}>
                       {fb.type}
                     </span>
                   </td>
@@ -537,7 +817,222 @@ function AdminPanel() {
     );
   };
 
-  // ---- Main render ----
+  // ----- Security tab -----
+  const renderSecurity = () => {
+    return (
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow max-w-2xl">
+        <h2 className="text-xl font-bold mb-4 dark:text-white">Security Settings</h2>
+
+        {twofaEnabled ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">2FA is enabled</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Your account is protected with two‑factor authentication.</p>
+              </div>
+            </div>
+            <button
+              onClick={handleDisableTwoFA}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+            >
+              Disable 2FA
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {twofaSetupStep === 'idle' && (
+              <div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Two‑factor authentication adds an extra layer of security to your account.
+                  Once enabled, you'll need to enter a code from your authenticator app when logging in.
+                </p>
+                <button
+                  onClick={handleSetupTwoFA}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Enable 2FA
+                </button>
+              </div>
+            )}
+
+            {twofaSetupStep === 'verify' && (
+              <div className="space-y-4">
+                <p className="text-gray-600 dark:text-gray-300">
+                  1. Scan the QR code with Google Authenticator (or any TOTP app).<br />
+                  2. Enter the 6‑digit code from the app to verify.
+                </p>
+                <div className="flex justify-center">
+                  {twofaQR && (
+                    <img
+                      src={`data:image/png;base64,${twofaQR}`}
+                      alt="2FA QR Code"
+                      className="border rounded-lg p-2 bg-white"
+                      style={{ width: '200px', height: '200px' }}
+                    />
+                  )}
+                </div>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit code"
+                    value={twofaCode}
+                    onChange={(e) => setTwofaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-32 text-center"
+                  />
+                  <button
+                    onClick={handleVerifyTwoFA}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  >
+                    Verify
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTwofaSetupStep('idle');
+                      setTwofaQR('');
+                      setTwofaSecret('');
+                      setTwofaCode('');
+                    }}
+                    className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ----- Wallet tab -----
+  const renderWallet = () => {
+    const filteredUsers = users.filter(u =>
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.username?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold dark:text-white">Wallet Management</h2>
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="px-3 py-1 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100 dark:bg-gray-700">
+              <tr>
+                <th className="p-2 text-left dark:text-white">User</th>
+                <th className="p-2 text-left dark:text-white">Email</th>
+                <th className="p-2 text-left dark:text-white">Balance</th>
+                <th className="p-2 text-left dark:text-white">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map(user => (
+                <tr key={user.id} className="border-t dark:border-gray-700">
+                  <td className="p-2 dark:text-gray-300">{user.username}</td>
+                  <td className="p-2 dark:text-gray-300">{user.email}</td>
+                  <td className="p-2 dark:text-gray-300 font-mono">{user.wallet_balance || 0}</td>
+                  <td className="p-2">
+                    <button
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setWalletAmount('');
+                        setWalletReason('');
+                        setShowWalletModal(true);
+                      }}
+                      className="text-sm px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                    >
+                      Adjust
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {showWalletModal && selectedUser && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
+              <h3 className="text-lg font-semibold dark:text-white mb-2">
+                Adjust Wallet – {selectedUser.username}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Current balance: <strong>{selectedUser.wallet_balance || 0}</strong>
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">Amount</label>
+                  <input
+                    type="number"
+                    value={walletAmount}
+                    onChange={(e) => setWalletAmount(e.target.value)}
+                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., 100 or -50"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Positive = credit, negative = debit.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">Reason</label>
+                  <input
+                    type="text"
+                    value={walletReason}
+                    onChange={(e) => setWalletReason(e.target.value)}
+                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., Refund, Bonus, Correction"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setShowWalletModal(false);
+                    setSelectedUser(null);
+                    setWalletAmount('');
+                    setWalletReason('');
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdjustWallet}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                >
+                  Apply Adjustment
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ----- System tab (placeholder) -----
+  const renderSystem = () => {
+    return (
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <h2 className="text-xl font-bold dark:text-white">System Status</h2>
+        <p className="text-gray-600 dark:text-gray-300">Uptime, database size, and other metrics will appear here.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">(Coming soon)</p>
+      </div>
+    );
+  };
+
+  // ----- Main render -----
   if (loading) return <div className="p-8 text-center dark:text-white">Loading...</div>;
 
   return (
@@ -597,6 +1092,9 @@ function AdminPanel() {
           {activeTab === 'articles' && renderArticles()}
           {activeTab === 'feedback' && renderFeedback()}
           {activeTab === 'audit' && renderAudit()}
+          {activeTab === 'security' && renderSecurity()}
+          {activeTab === 'wallet' && renderWallet()}
+          {activeTab === 'system' && renderSystem()}
         </div>
       </div>
 
@@ -630,7 +1128,7 @@ function AdminPanel() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Slug (URL-friendly)</label>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Slug</label>
                 <input
                   type="text"
                   value={articleForm.slug}

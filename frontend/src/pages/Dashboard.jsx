@@ -549,6 +549,16 @@ function Dashboard() {
             <span className="text-sm">Logout</span>
           </button>
         </div>
+	{/* Referral Widget */}
+        <div className="px-3 py-2 mt-2 border-t border-gray-700">
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition"
+  >
+            <Users className="w-4 h-4" />
+            <span>Referral Program</span>
+          </button>
+       </div>
       </aside>
 
       {/* Main Content */}

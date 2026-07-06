@@ -9,6 +9,11 @@ if not ENCRYPTION_KEY:
 cipher = Fernet(ENCRYPTION_KEY.encode())
 
 def encrypt_token(token: str) -> str:
+    if token is None:
+        return None
+    # ... rest of encryption
+
+def encrypt_token(token: str) -> str:
     """Encrypt a token or cookie string."""
     return cipher.encrypt(token.encode()).decode()
 

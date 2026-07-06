@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Award, TrendingUp, Flame } from 'lucide-react';
+import { Award, TrendingUp, Flame, Sparkles } from 'lucide-react';
 
 const API_BASE = 'https://sociout-backend.onrender.com/api';
 
 const GamificationCard = () => {
-  const [data, setData] = useState({ xp: 0, level: 1, streak_days: 0, next_level_xp: 100 });
+  const [data, setData] = useState({ xp: 0, level: 1, streak_days: 0, next_level_xp: 100, perks: {} });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -12,7 +12,7 @@ const GamificationCard = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       try {
-        const res = await fetch(`${API_BASE}/users/me/gamification`, {
+        const res = await fetch(`${API_BASE}/gamification/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const json = await res.json();
@@ -33,13 +33,12 @@ const GamificationCard = () => {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-          <Award className="w-4 h-4 text-yellow-500" /> Level {data.level}
-        </h3>
-        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-          <span className="flex items-center gap-1">
-            <Flame className="w-3 h-3 text-orange-500" /> {data.streak_days} day streak
-          </span>
+        <div className="flex items-center gap-2">
+          <Award className="w-5 h-5 text-yellow-500" />
+          <span className="text-sm font-bold text-gray-900 dark:text-white">Level {data.level}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <Flame className="w-4 h-4 text-orange-500" /> {data.streak_days} day streak
         </div>
       </div>
       <div className="flex items-center gap-3">
@@ -55,6 +54,10 @@ const GamificationCard = () => {
             <span>{data.next_level_xp} XP</span>
           </div>
         </div>
+      </div>
+      <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 flex items-center gap-1">
+        <Sparkles className="w-3 h-3 text-purple-400" />
+        <span>{data.perks?.next_perk || 'Keep going!'}</span>
       </div>
     </div>
   );

@@ -6,29 +6,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+import secrets
+from fastapi import Request
 
 from app.database import get_db
 from app.models.user import User
-from app.models.campaign import Campaign
+from app.models.campaign import Campaign, CampaignStatus, CampaignAction
 from app.models.oauth import OAuthToken
 from app.schemas.user import UserCreate
-from app.core.auth import decode_access_token, get_password_hash
-from datetime import datetime
+from app.core.auth import decode_access_token, get_password_hash, get_current_user
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 security = HTTPBearer()
 
 def require_admin(credentials: HTTPAuthorizationCredentials, db: Session):
-    token = credentials.credentials
-    payload = decode_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    email = payload.get("sub")
-    user = db.query(User).filter(User.email == email).first()
+    user = get_current_user(credentials, db)
     if not user or not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+# ===== USERS =====
 @router.get("/users")
 def get_all_users(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -39,21 +36,6 @@ def get_all_users(
     require_admin(credentials, db)
     users = db.query(User).offset(skip).limit(limit).all()
     return users
-
-@router.get("/stats")
-def get_stats(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    require_admin(credentials, db)
-    total_users = db.query(User).count()
-    total_campaigns = db.query(Campaign).count()
-    total_oauth = db.query(OAuthToken).count()
-    return {
-        "total_users": total_users,
-        "total_campaigns": total_campaigns,
-        "youtube_connected": total_oauth,
-    }
 
 @router.post("/users/batch")
 def batch_create_users(
@@ -78,7 +60,35 @@ def batch_create_users(
     db.commit()
     return results
 
-# ========== NEW: Get all campaigns ==========
+# ===== STATS =====
+@router.get("/stats")
+def get_stats(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    require_admin(credentials, db)
+    total_users = db.query(User).count()
+    total_campaigns = db.query(Campaign).count()
+    youtube_connected = db.query(OAuthToken).filter(OAuthToken.provider == "google").count()
+    tiktok_connected = db.query(OAuthToken).filter(OAuthToken.provider == "tiktok").count()
+    completed_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.COMPLETED).count()
+    failed_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.FAILED).count()
+    running_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.RUNNING).count()
+    total_actions = db.query(CampaignAction).count()
+    successful_actions = db.query(CampaignAction).filter(CampaignAction.success == True).count()
+    return {
+        "total_users": total_users,
+        "total_campaigns": total_campaigns,
+        "youtube_connected": youtube_connected,
+        "tiktok_connected": tiktok_connected,
+        "completed_campaigns": completed_campaigns,
+        "failed_campaigns": failed_campaigns,
+        "running_campaigns": running_campaigns,
+        "total_actions": total_actions,
+        "successful_actions": successful_actions,
+    }
+
+# ===== ALL CAMPAIGNS =====
 @router.get("/all-campaigns")
 def get_all_campaigns(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -101,115 +111,13 @@ def get_all_campaigns(
         "started_at": c.started_at.isoformat() if c.started_at else None,
     } for c in campaigns]
 
-@router.get("/stats")
-def get_stats(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
-    require_admin(credentials, db)
-    total_users = db.query(User).count()
-    total_campaigns = db.query(Campaign).count()
-    youtube_connected = db.query(OAuthToken).filter(OAuthToken.provider == "google").count()
-    tiktok_connected = db.query(OAuthToken).filter(OAuthToken.provider == "tiktok").count()
-    # Optional: campaign status counts
-    completed_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.COMPLETED).count()
-    failed_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.FAILED).count()
-    running_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.RUNNING).count()
-    total_actions = db.query(CampaignAction).count()
-    successful_actions = db.query(CampaignAction).filter(CampaignAction.success == True).count()
-    return {
-        "total_users": total_users,
-        "total_campaigns": total_campaigns,
-        "youtube_connected": youtube_connected,
-        "tiktok_connected": tiktok_connected,
-        "completed_campaigns": completed_campaigns,
-        "failed_campaigns": failed_campaigns,
-        "running_campaigns": running_campaigns,
-        "total_actions": total_actions,
-        "successful_actions": successful_actions,
-    }
-
-# ========== TEMPORARY BACKDOOR – REMOVE AFTER USE ==========
-import secrets
-from fastapi import Request
-
-@router.post("/tmp/make-admin")
-async def make_admin_endpoint(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    🔒 TEMPORARY endpoint – remove after setting admin user.
-    Uses a secret token for authentication (see code).
-    """
-    # Generate a random token (run `python -c "import secrets; print(secrets.token_urlsafe(32))"` once)
-    # Then replace the string below with that token.
-    EXPECTED_TOKEN = "tczZWYQ4xeIZM3Fp8nEDDK8XgkWTmDj_Mg7mmvOg6c0"  # 👈 CHANGE THIS TO YOUR GENERATED TOKEN
-
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or auth_header != f"Bearer {EXPECTED_TOKEN}":
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    target_email = "tijanisemilore21@gmail.com"  # 👈 CHANGE TO YOUR EMAIL
-    user = db.query(User).filter(User.email == target_email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.is_admin = True
-    db.commit()
-    return {"message": f"Admin rights granted to {user.email}"}
-# ===== ADD THESE MISSING ENDPOINTS =====
-
-@router.get("/stats")
-def get_admin_stats(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    user = get_current_user(credentials, db)
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin required")
-    
-    total_users = db.query(User).count()
-    total_campaigns = db.query(Campaign).count()
-    youtube_connected = db.query(OAuthToken).filter(OAuthToken.provider == "google").count()
-    tiktok_connected = db.query(OAuthToken).filter(OAuthToken.provider == "tiktok").count()
-    
-    return {
-        "total_users": total_users,
-        "total_campaigns": total_campaigns,
-        "youtube_connected": youtube_connected,
-        "tiktok_connected": tiktok_connected,
-    }
-
-@router.get("/all-campaigns")
-def get_all_campaigns(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    user = get_current_user(credentials, db)
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin required")
-    
-    campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).all()
-    return [
-        {
-            "id": c.id,
-            "user_id": c.user_id,
-            "name": c.name,
-            "action_type": c.action_type.value if hasattr(c.action_type, 'value') else c.action_type,
-            "status": c.status.value if hasattr(c.status, 'value') else c.status,
-            "completed_count": c.completed_count,
-            "target_count": c.target_count,
-            "created_at": c.created_at,
-        }
-        for c in campaigns
-    ]
-
+# ===== USER CONNECTIONS =====
 @router.get("/user-connections")
 def get_user_connections(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    user = get_current_user(credentials, db)
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin required")
-    
+    require_admin(credentials, db)
     users = db.query(User).all()
     result = []
     for u in users:
@@ -225,3 +133,43 @@ def get_user_connections(
         })
     return result
 
+# ===== TEMPORARY BACKDOOR (remove after use) =====
+EXPECTED_TOKEN = "tczZWYQ4xeIZM3Fp8nEDDK8XgkWTmDj_Mg7mmvOg6c0"  # 👈 Replace with your own token if needed
+
+@router.post("/tmp/make-admin")
+async def make_admin_endpoint(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    🔒 TEMPORARY endpoint – remove after setting admin user.
+    Uses a secret token for authentication.
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or auth_header != f"Bearer {EXPECTED_TOKEN}":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    target_email = "tijanisemilore21@gmail.com"  # 👈 Change to your email
+    user = db.query(User).filter(User.email == target_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_admin = True
+    db.commit()
+    return {"message": f"Admin rights granted to {user.email}"}
+@router.get("/wallet/{user_id}")
+def get_wallet(user_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"balance": user.wallet_balance}
+
+@router.post("/wallet/{user_id}/adjust")
+def adjust_wallet(user_id: int, amount: int, reason: str, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Create audit log
+    audit = WalletAudit(user_id=user.id, admin_id=current_user.id, amount=amount, reason=reason)
+    db.add(audit)
+    user.wallet_balance += amount
+    db.commit()
+    return {"new_balance": user.wallet_balance}

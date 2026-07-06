@@ -12,28 +12,16 @@ from app.models.article import Article
 from app.models.feedback import Feedback
 from app.models.support import SupportContribution
 from app.models.admin_action import AdminAction
-from app.models.referral import Referral  # <-- ADDED
+from app.models.referral import Referral
+from app.models.badge import Badge, UserBadge                 # NEW
+from app.models.wallet_audit import WalletAudit               # NEW
+from app.models.admin_settings import AdminSettings           # NEW (for 2FA recovery codes)
 
 __all__ = [
-    'User',
-    'ThumbnailTest',
-    'OAuthToken',
-    'Campaign',
-    'CampaignAction',
-    'CampaignTemplate',
-    'CampaignStatus',
-    'CampaignActionType',
-    'SubscriptionPlan',
-    'UserSubscription',
-    'ActionJob',
-    'ActionLog',
-    'PoolAccount',
-    'ActivityLog',
-    'Ad',
-    'AdSlotPrice',
-    'Article',
-    'Feedback',
-    'SupportContribution',
-    'AdminAction',
-    'Referral',          # <-- ADDED
+    'User', 'ThumbnailTest', 'OAuthToken', 'Campaign', 'CampaignAction',
+    'CampaignTemplate', 'CampaignStatus', 'CampaignActionType',
+    'SubscriptionPlan', 'UserSubscription', 'ActionJob', 'ActionLog',
+    'PoolAccount', 'ActivityLog', 'Ad', 'AdSlotPrice', 'Article',
+    'Feedback', 'SupportContribution', 'AdminAction', 'Referral',
+    'Badge', 'UserBadge', 'WalletAudit', 'AdminSettings',
 ]
