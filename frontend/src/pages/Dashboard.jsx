@@ -88,7 +88,6 @@ function Dashboard() {
     loadUser();
     loadCampaigns();
     loadActivities();
-    // Show Welcome Modal if first visit
     const hasVisited = localStorage.getItem('hasVisitedResourceHub');
     if (!hasVisited) {
       setShowWelcome(true);
@@ -108,40 +107,42 @@ function Dashboard() {
       navigate('/login');
     }
   };
+
   const generateComments = async () => {
-  if (!formData.video_url) {
-    addToast('Please enter a video URL first', 'warning');
-    return;
-  }
-  setGeneratingComments(true);
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE}/ai/generate-comments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ video_url: formData.video_url }),
-    });
-    if (response.ok) {
-      const data = await response.json();
-      if (data.comments && data.comments.length > 0) {
-        setCommentListText(data.comments.join('\n'));
-        addToast('Comments generated!', 'success');
-      } else {
-        addToast('No comments generated, try again.', 'warning');
-      }
-    } else {
-      const err = await response.json();
-      addToast(err.detail || 'Failed to generate comments', 'error');
+    if (!formData.video_url) {
+      addToast('Please enter a video URL first', 'warning');
+      return;
     }
-  } catch (err) {
-    addToast('Network error', 'error');
-  } finally {
-    setGeneratingComments(false);
-  }
-};
+    setGeneratingComments(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/ai/generate-comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ video_url: formData.video_url }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.comments && data.comments.length > 0) {
+          setCommentListText(data.comments.join('\n'));
+          addToast('Comments generated!', 'success');
+        } else {
+          addToast('No comments generated, try again.', 'warning');
+        }
+      } else {
+        const err = await response.json();
+        addToast(err.detail || 'Failed to generate comments', 'error');
+      }
+    } catch (err) {
+      addToast('Network error', 'error');
+    } finally {
+      setGeneratingComments(false);
+    }
+  };
+
   const loadCampaigns = async () => {
     try {
       const response = await fetch(`${API_BASE}/campaigns`, {
@@ -583,16 +584,17 @@ function Dashboard() {
             <span className="text-sm">Logout</span>
           </button>
         </div>
-	{/* Referral Widget */}
+
+        {/* Referral Widget */}
         <div className="px-3 py-2 mt-2 border-t border-gray-700">
           <button
             onClick={() => navigate('/profile')}
             className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition"
-  >
+          >
             <Users className="w-4 h-4" />
             <span>Referral Program</span>
           </button>
-       </div>
+        </div>
       </aside>
 
       {/* Main Content */}
@@ -966,29 +968,49 @@ function Dashboard() {
                   onChange={(e) => setScheduledDate(e.target.value)}
                 />
               </div>
-              {{formData.action_type === 'COMMENT' && (
-  <div className="mb-4">
-    <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Comments (one per line, randomly selected)</label>
-    <div className="flex gap-2 mb-2">
-      <button
-        type="button"
-        onClick={generateComments}
-        disabled={!formData.video_url || generatingComments}
-        className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition disabled:opacity-50"
-      >
-        {generatingComments ? 'Generating...' : '✨ Generate Comments'}
-      </button>
-    </div>
-    <textarea
-      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-      rows="4"
-      placeholder="Great video!%0AThanks for sharing!%0AVery helpful"
-      value={commentListText}
-      onChange={(e) => setCommentListText(e.target.value)}
-    />
-    <p className="text-xs text-gray-400 mt-1">💡 Tip: Use natural, engaging comments. Avoid spam.</p>
-  </div>
-)}
+              {formData.action_type === 'COMMENT' && (
+                <div className="mb-4">
+                  <label className="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Comments (one per line, randomly selected)</label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={generateComments}
+                      disabled={!formData.video_url || generatingComments}
+                      className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition disabled:opacity-50"
+                    >
+                      {generatingComments ? 'Generating...' : '✨ Generate Comments'}
+                    </button>
+                  </div>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                    rows="4"
+                    placeholder="Great video!%0AThanks for sharing!%0AVery helpful"
+                    value={commentListText}
+                    onChange={(e) => setCommentListText(e.target.value)}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">💡 Tip: Use natural, engaging comments. Avoid spam.</p>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {loading ? 'Creating...' : 'Create Campaign'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Campaign Modal */}
       {showEditModal && editingCampaign && (
