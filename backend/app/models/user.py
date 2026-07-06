@@ -51,12 +51,12 @@ class User(Base):
     action_logs = relationship("app.models.action_log.ActionLog", back_populates="user")
     feedback = relationship("app.models.feedback.Feedback", back_populates="user")
     support_contributions = relationship("app.models.support.SupportContribution", back_populates="user")
-    admin_actions = relationship("app.models.admin_action.AdminAction", foreign_keys="[AdminAction.admin_id]", back_populates="admin")
+    admin_actions = relationship("AdminAction", foreign_keys="[AdminAction.admin_id]", back_populates="admin")
     # Referral relationships
     referrals_made = relationship("Referral", foreign_keys="[Referral.referrer_id]", back_populates="referrer")
     referrals_received = relationship("Referral", foreign_keys="[Referral.referred_id]", back_populates="referred")
     badges = relationship("UserBadge", back_populates="user")
-    wallet_audits = relationship("WalletAudit", back_populates="user")
+    wallet_audits = relationship("WalletAudit", foreign_keys="[WalletAudit.user_id]", back_populates="user")
 
     def __repr__(self):
         return f"<User {self.username}>"
