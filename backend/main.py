@@ -16,6 +16,7 @@ from app.api import referral
 from app.api import templates 
 from app.api import scheduler
 from app.api import ads
+from app.api import ai
 
 # ===== NEW IMPORTS =====
 from app.api import articles, admin_users, feedback, support, admin_audit, admin_pool
@@ -76,6 +77,7 @@ app.include_router(templates.router)
 app.include_router(scheduler.router)
 app.include_router(ads.router)
 app.include_router(referral.router)
+app.include_router(ai.router)
 
 # ===== NEW ROUTERS (Admin & CMS) =====
 app.include_router(articles.router)
