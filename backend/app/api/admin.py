@@ -1,4 +1,4 @@
-﻿"""
+"""
 Admin Panel API
 Protected endpoints for admin users only
 """
@@ -135,7 +135,7 @@ def get_user_connections(
     return result
 
 # ===== TEMPORARY BACKDOOR (remove after use) =====
-EXPECTED_TOKEN = "tczZWYQ4xeIZM3Fp8nEDDK8XgkWTmDj_Mg7mmvOg6c0"  # ðŸ‘ˆ Replace with your own token if needed
+EXPECTED_TOKEN = "tczZWYQ4xeIZM3Fp8nEDDK8XgkWTmDj_Mg7mmvOg6c0"  # 👈 Replace with your own token if needed
 
 @router.post("/tmp/make-admin")
 async def make_admin_endpoint(
@@ -143,37 +143,39 @@ async def make_admin_endpoint(
     db: Session = Depends(get_db)
 ):
     """
-    ðŸ”’ TEMPORARY endpoint â€“ remove after setting admin user.
+    🔒 TEMPORARY endpoint – remove after setting admin user.
     Uses a secret token for authentication.
     """
     auth_header = request.headers.get("Authorization")
     if not auth_header or auth_header != f"Bearer {EXPECTED_TOKEN}":
         raise HTTPException(status_code=403, detail="Forbidden")
-    target_email = "tijanisemilore21@gmail.com"  # ðŸ‘ˆ Change to your email
+    target_email = "tijanisemilore21@gmail.com"  # 👈 Change to your email
     user = db.query(User).filter(User.email == target_email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.is_admin = True
     db.commit()
     return {"message": f"Admin rights granted to {user.email}"}
-@router.get("/wallet/{user_id}", response_model=None)
-def get_wallet(user_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"balance": user.wallet_balance}
 
-@router.post("/wallet/{user_id}/adjust", response_model=None)
-def adjust_wallet(user_id: int, amount: int, reason: str, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    # Create audit log
-    audit = WalletAudit(user_id=user.id, admin_id=current_user.id, amount=amount, reason=reason)
-    db.add(audit)
-    user.wallet_balance += amount
-    db.commit()
-    return {"new_balance": user.wallet_balance}
+# ===== WALLET ENDPOINTS (temporarily disabled) =====
+# These endpoints are currently commented out to resolve a FastAPI startup error.
+# They will be re-enabled after the issue is fixed.
 
-"# force rebuild" 
-"# dummy change to force rebuild" 
+# @router.get("/wallet/{user_id}", response_model=None)
+# def get_wallet(user_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     return {"balance": user.wallet_balance}
+
+# @router.post("/wallet/{user_id}/adjust", response_model=None)
+# def adjust_wallet(user_id: int, amount: int, reason: str, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     # Create audit log
+#     audit = WalletAudit(user_id=user.id, admin_id=current_user.id, amount=amount, reason=reason)
+#     db.add(audit)
+#     user.wallet_balance += amount
+#     db.commit()
+#     return {"new_balance": user.wallet_balance}
