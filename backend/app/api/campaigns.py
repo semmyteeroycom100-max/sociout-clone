@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
+﻿from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.utils.rate_limit import limiter
 from slowapi.errors import RateLimitExceeded
@@ -20,7 +20,7 @@ from app.schemas.campaign import CampaignCreate
 from app.core.auth import decode_access_token
 from app.services.youtube import YouTubeService
 from app.services.webhook import send_webhook
-from app.services.email import send_campaign_completion_email
+# from app.services.email import send_campaign_completion_email
 from app.services.activity_logger import log_activity
 from app.services.account_selector import AccountSelector
 from app.services.action_executor import ActionExecutor
@@ -112,7 +112,7 @@ def _run_campaign_logic(campaign_id: int, db: Session):
             update_streak(user, db)
             if campaign.webhook_url:
                 send_webhook(campaign.webhook_url, {"campaign_id": campaign.id, "status": "completed"})
-            send_campaign_completion_email(user.email, campaign.name)
+            # send_campaign_completion_email(user.email, campaign.name)
             log_activity(db, user.id, "campaign_completed", f"Campaign '{campaign.name}' completed (scheduled)")
         else:
             campaign.status = CampaignStatus.FAILED
@@ -157,7 +157,7 @@ def create_campaign(
     try:
         video_id = extract_video_id(campaign_data.video_url)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL – could not extract video ID")
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL â€“ could not extract video ID")
 
     # For subscribe campaigns, fetch the channel ID
     channel_id = None
@@ -168,11 +168,11 @@ def create_campaign(
             OAuthToken.provider == "google"
         ).first()
         if not oauth_token:
-            raise HTTPException(status_code=400, detail="YouTube not connected – cannot subscribe")
+            raise HTTPException(status_code=400, detail="YouTube not connected â€“ cannot subscribe")
         
         try:
             # Use the user's token to fetch video info
-            # We need to run async code in sync context – use asyncio.run()
+            # We need to run async code in sync context â€“ use asyncio.run()
             async def fetch_channel_id():
                 youtube_service = YouTubeService(oauth_token.access_token)
                 info = await youtube_service.get_video_info(video_id)

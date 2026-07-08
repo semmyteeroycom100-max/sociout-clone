@@ -1,4 +1,4 @@
-fastapi==0.104.1
+﻿fastapi==0.104.1
 uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
@@ -18,11 +18,9 @@ itsdangerous==2.1.2
 google-api-python-client==2.128.0
 python-multipart==0.0.20
 slowapi==0.1.9
-resend==0.3.0
 stripe==6.0.0
 pyotp==2.9.0
 qrcode==7.4.2
 pillow==10.2.0
 # Critical fix: pin urllib3 to a version compatible with requests 2.23.0
-urllib3==1.26.18
 six==1.16.0
