@@ -15,6 +15,7 @@ from app.models.campaign import Campaign, CampaignStatus, CampaignAction
 from app.models.oauth import OAuthToken
 from app.schemas.user import UserCreate
 from app.core.auth import decode_access_token, get_password_hash, get_current_user
+from app.models.wallet_audit import WalletAudit
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 security = HTTPBearer()
@@ -155,14 +156,14 @@ async def make_admin_endpoint(
     user.is_admin = True
     db.commit()
     return {"message": f"Admin rights granted to {user.email}"}
-@router.get("/wallet/{user_id}")
+@router.get("/wallet/{user_id}", response_model=None)
 def get_wallet(user_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"balance": user.wallet_balance}
 
-@router.post("/wallet/{user_id}/adjust")
+@router.post("/wallet/{user_id}/adjust", response_model=None)
 def adjust_wallet(user_id: int, amount: int, reason: str, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

@@ -126,7 +126,7 @@ function Profile() {
     }
     setUploadingAvatar(true);
     const formData = new FormData();
-    formData.append('avatar', avatarFile);
+    formData.append('file', avatarFile);
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE}/users/avatar`, {
