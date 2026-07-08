@@ -18,7 +18,7 @@ itsdangerous==2.1.2
 google-api-python-client==2.128.0
 python-multipart==0.0.20
 slowapi==0.1.9
-resend==1.0.0
+resend==0.3.0
 stripe==6.0.0
 pyotp==2.9.0
 qrcode==7.4.2
