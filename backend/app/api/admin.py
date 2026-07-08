@@ -175,3 +175,4 @@ def adjust_wallet(user_id: int, amount: int, reason: str, current_user: User = D
     db.commit()
     return {"new_balance": user.wallet_balance}
 
+"# force rebuild" 
