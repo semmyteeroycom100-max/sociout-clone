@@ -7,7 +7,7 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 bcrypt==4.1.2
 authlib==1.2.1
-requests==2.31.0
+requests==2.23.0                    # <-- changed to match resend
 celery==5.3.4
 redis==5.0.1
 httpx==0.25.2
