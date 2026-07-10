@@ -7,7 +7,6 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 bcrypt==4.1.2
 authlib==1.2.1
-requests==2.31.0
 celery==5.3.4
 redis==5.0.1
 httpx==0.25.2
@@ -24,3 +23,4 @@ qrcode==7.4.2
 pillow==10.2.0
 urllib3==1.26.18
 six==1.16.0
+requests==2.31.0
